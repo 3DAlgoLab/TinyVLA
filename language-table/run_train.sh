@@ -1,0 +1,1 @@
+PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python python language_table/train/main.py --config=./language_table/train/configs/language_table_sim_local.py --workdir=/tmp/language_table_train/

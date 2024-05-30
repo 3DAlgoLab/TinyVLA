@@ -1,0 +1,6 @@
+rlds[tensorflow]
+ipykernel
+ipywidgets
+dm-reverb-nightly
+tfds-nightly
+icecream

@@ -1,0 +1,6 @@
+ipywidgets
+ipykernel
+keras
+keras-nlp
+matplotlib
+jax[cuda12]
