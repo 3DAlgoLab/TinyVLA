@@ -1,0 +1,5 @@
+{
+  "python.analysis.include": [
+    "./paligemma_exp/big_vision_repo/**"
+  ]
+}
