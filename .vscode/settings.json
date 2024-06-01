@@ -18,5 +18,8 @@
     "titleBar.inactiveBackground": "#201ca399",
     "titleBar.inactiveForeground": "#e7e7e799"
   },
-  "peacock.remoteColor": "#201ca3"
+  "peacock.remoteColor": "#201ca3",
+  "python.analysis.extraPaths": [
+    "/dev_repo/TinyVLA.paligemma_exp/big_vision_repo/big_vision"
+  ]
 }
