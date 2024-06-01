@@ -1,25 +1,5 @@
 {
-  "workbench.colorCustomizations": {
-    "activityBar.activeBackground": "#2923cf",
-    "activityBar.background": "#2923cf",
-    "activityBar.foreground": "#e7e7e7",
-    "activityBar.inactiveForeground": "#e7e7e799",
-    "activityBarBadge.background": "#1b0505",
-    "activityBarBadge.foreground": "#e7e7e7",
-    "commandCenter.border": "#e7e7e799",
-    "sash.hoverBorder": "#2923cf",
-    "statusBar.background": "#201ca3",
-    "statusBar.foreground": "#e7e7e7",
-    "statusBarItem.hoverBackground": "#2923cf",
-    "statusBarItem.remoteBackground": "#201ca3",
-    "statusBarItem.remoteForeground": "#e7e7e7",
-    "titleBar.activeBackground": "#201ca3",
-    "titleBar.activeForeground": "#e7e7e7",
-    "titleBar.inactiveBackground": "#201ca399",
-    "titleBar.inactiveForeground": "#e7e7e799"
-  },
-  "peacock.remoteColor": "#201ca3",
-  "python.analysis.extraPaths": [
-    "/dev_repo/TinyVLA.paligemma_exp/big_vision_repo/big_vision"
+  "python.analysis.include": [
+    "./paligemma_exp/big_vision_repo/**"
   ]
 }

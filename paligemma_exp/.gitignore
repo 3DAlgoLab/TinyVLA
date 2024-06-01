@@ -161,6 +161,6 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-big_vision_repo
+# big_vision_repo
 longcap100
 paligemma_tokenizer.model
