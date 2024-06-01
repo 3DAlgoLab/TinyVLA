@@ -38,26 +38,27 @@ CLASS_NAMES = {
 # As a separate function to cache result across instances.
 @functools.lru_cache(maxsize=None)
 def get_classes(dataset_name, pp_txt):
-  """Load the class label strings and tokenize them using pp_txt."""
-  pp_fn = pp_builder.get_preprocess_fn(pp_txt, log_data=False)
-  return np.array([pp_fn({"label": name})["labels"]
-                   for name in CLASS_NAMES[dataset_name]])
+    """Load the class label strings and tokenize them using pp_txt."""
+    pp_fn = pp_builder.get_preprocess_fn(pp_txt, log_data=False)
+    return np.array(
+        [pp_fn({"label": name})["labels"] for name in CLASS_NAMES[dataset_name]]
+    )
 
 
 def scoring(predict_fn, tokenized_labels):
 
-  def _scoring_fn(train_state, batch, *a, **kw):
-    batch = {"_label_tokens": tokenized_labels, **batch}
-    scores = predict_fn(train_state, batch, *a, **kw)
-    predictions = jnp.argmax(scores, axis=-1)
-    return {"prec@1": predictions == batch["label"]}
+    def _scoring_fn(train_state, batch, *a, **kw):
+        batch = {"_label_tokens": tokenized_labels, **batch}
+        scores = predict_fn(train_state, batch, *a, **kw)
+        predictions = jnp.argmax(scores, axis=-1)
+        return {"prec@1": predictions == batch["label"]}
 
-  return _scoring_fn
+    return _scoring_fn
 
 
 class Evaluator(mean.Evaluator):
-  """Evaluator for classification accuracy based on scoring all classes."""
+    """Evaluator for classification accuracy based on scoring all classes."""
 
-  def __init__(self, predict_fn, data, pp_fn, pp_txt, *a, **kw):
-    cls_tokens = get_classes(data["name"], pp_txt)
-    super().__init__(scoring(predict_fn, cls_tokens), data, pp_fn, *a, **kw)
+    def __init__(self, predict_fn, data, pp_fn, pp_txt, *a, **kw):
+        cls_tokens = get_classes(data["name"], pp_txt)
+        super().__init__(scoring(predict_fn, cls_tokens), data, pp_fn, *a, **kw)
