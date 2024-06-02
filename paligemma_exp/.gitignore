@@ -164,3 +164,4 @@ cython_debug/
 # big_vision_repo
 longcap100
 paligemma_tokenizer.model
+*.npz
