@@ -1,6 +1,6 @@
 import token
-from transformers import AutoTokenizer
 
+from transformers import AutoTokenizer
 
 # model_name = "bczhou/TinyLLaVA-3.1B"
 # model_name = "bert-base-uncased"
@@ -16,4 +16,10 @@ for i in range(0, 10000):
         print(f"The integer '{integer_text}' has unique tokens: {tokens[0]}")
     else:
         print(f"The integer '{integer_text}' does not have unique tokens.")
+        print("tokens:", tokens)
         break
+
+
+# another test
+tokens = tokenizer.tokenize("foo bar")
+print(tokens)
