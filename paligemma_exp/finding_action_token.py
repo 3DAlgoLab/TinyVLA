@@ -19,7 +19,9 @@ sp = spm.SentencePieceProcessor(TOKENIZER_PATH)
 
 # encode: text => id
 print(sp.EncodeAsPieces("This is a test"))
+print(sp.EncodeAsPieces("This is a test_case"))
 print(sp.EncodeAsIds("This is a test"))
+print(sp.EncodeAsIds("Hello World"))
 
 # decode: id => text
 print(sp.DecodePieces(["This", "▁is", "▁a", "▁t", "est"]))
@@ -66,15 +68,16 @@ pieces = []
 
 for n, i in enumerate(range(last_id-reserved_size, last_id+1)):
     piece = sp.IdToPiece(i)
-    print(f"id({n}):{i} -->piece:{piece}")
+    print(f"id({n}):{i} -->piece:{piece}, bytes:{piece.encode('utf-8')}")
     pieces.append(piece)
 
 #%%
 pieces_str = sp.DecodePieces(pieces)
 # print(pieces_str)
-ic(pieces_str)
+
 ic(len(pieces_str))
-print(pieces_str)
+ic(pieces_str)
+
 
 # %%
 # Test full string conversion 
@@ -84,3 +87,5 @@ print(pieces_str)
 # scale for translation  1/128 (meter)
 # scale for rotation 180./128 (degree)
 # action value range(-scale, scale) -> action value (-128, 128)
+
+# %%
