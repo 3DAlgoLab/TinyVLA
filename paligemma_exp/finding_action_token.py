@@ -68,7 +68,7 @@ pieces = []
 
 for n, i in enumerate(range(last_id-reserved_size, last_id+1)):
     piece = sp.IdToPiece(i)
-    print(f"id({n}):{i} -->piece:{piece}, bytes:{piece.encode('utf-8')}")
+    print(f"id({n}):{i} -->piece:{piece}, bytes:{chr(piece)}")
     pieces.append(piece)
 
 #%%
