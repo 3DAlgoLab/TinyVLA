@@ -1,16 +1,5 @@
 # %%
 import os
-import sys
-
-#
-# Install missing dependencies. Assume jax~=0.4.25 with GPU available.
-
-# %% [markdown]
-# ### Import JAX and other dependencies
-#
-# Import JAX and other dependencies required for PaliGemma, like TensorFlow and NumPy.
-
-# %%
 import base64
 import functools
 import html
@@ -73,6 +62,7 @@ if not os.path.exists(DATA_DIR):
     os.system("gsutil -m -q cp -n -r gs://longcap100/ .")
     print(f"Data path: {DATA_DIR}")
 
+# %%
 # Define model
 model_config = ml_collections.FrozenConfigDict(
     {
@@ -155,9 +145,9 @@ parameter_overview(params)
 
 
 def preprocess_image(image, size=224):
-    """ Model has been trained to handle images of different aspects ratios
-     resized to 224x224 in the range [-1, 1]. Bilinear and antialias resize
-     options are helpful to improve quality in some tasks. """
+    """Model has been trained to handle images of different aspects ratios
+    resized to 224x224 in the range [-1, 1]. Bilinear and antialias resize
+    options are helpful to improve quality in some tasks."""
 
     image = np.asarray(image)
     if image.ndim == 2:  # Convert image without last channel into greyscale.
@@ -171,15 +161,15 @@ def preprocess_image(image, size=224):
 
 
 def preprocess_tokens(prefix, suffix=None, seqlen=None):
-    """ Model has been trained to handle tokenized text composed of a prefix with
-     full attention and a suffix with causal attention."""
+    """Model has been trained to handle tokenized text composed of a prefix with
+    full attention and a suffix with causal attention."""
     separator = "\n"
-    tokens = tokenizer.encode(prefix, add_bos=True) + tokenizer.encode(separator) # type: ignore
+    tokens = tokenizer.encode(prefix, add_bos=True) + tokenizer.encode(separator)  # type: ignore
     mask_ar = [0] * len(tokens)  # 0 to use full attention for prefix.
     mask_loss = [0] * len(tokens)  # 0 to not use prefix tokens in the loss.
 
     if suffix:
-        suffix = tokenizer.encode(suffix, add_eos=True) # type: ignore
+        suffix = tokenizer.encode(suffix, add_eos=True)  # type: ignore
         tokens += suffix
         mask_ar += [1] * len(suffix)  # 1 to use causal attention for suffix.
         mask_loss += [1] * len(suffix)  # 1 to use suffix tokens in the loss.
@@ -202,7 +192,7 @@ def postprocess_tokens(tokens):
         tokens = tokens[:eos_pos]
     except ValueError:
         pass
-    return tokenizer.decode(tokens) # type: ignore
+    return tokenizer.decode(tokens)  # type: ignore
 
 
 # ### Create the training and validation iterators

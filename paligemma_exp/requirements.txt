@@ -1,6 +1,12 @@
 ipywidgets
 ipykernel
-keras
-keras-nlp
 matplotlib
 jax[cuda12]
+overrides
+ml_collections
+einops~=0.7
+sentencepiece
+flax
+keras
+keras-nlp
+tensorflow 
