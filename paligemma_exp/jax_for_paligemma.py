@@ -153,29 +153,12 @@ def parameter_overview(params):
 print(" == Model params == ")
 parameter_overview(params)
 
-# %% [markdown]
-# ## Prepare to tune the model
-#
-# Now that your model is configured, you can tune it. In this step, you'll create your model's inputs as well as the training and validation iterators, view the training examples, and define the training and validation loops.
 
-# %% [markdown]
-# ### Create model inputs
-#
-# The model checkpoint you're using has already been trained on images of various aspect ratios that have been resized to 224x224 pixels, and to handle tokenized texts.
-#
-# The code below defines three functions that you'll use in the next step create the model's inputs:
-#
-# * **`preprocess_image`:** Normalizes the image data. In this case, pre-processing converts the passed-in image to greyscale, removes the alpha layer, and resizes the passed-in image to the size required by the model for image inputs (224x224 pixels).
-# * **`preprocess_tokens`:** Splits the tokens up and adds flags to mark whether a token is a prefix or suffix token. These flags will be used later on in the code, during the training step and the evaluation loop.
-# * **`postprocess_tokens`:** Removes any tokens left at and/or after the end-of-sequence (EOS) token and returns the remaining decoded tokens.
-#
-
-
-# %%
 def preprocess_image(image, size=224):
-    # Model has been trained to handle images of different aspects ratios
-    # resized to 224x224 in the range [-1, 1]. Bilinear and antialias resize
-    # options are helpful to improve quality in some tasks.
+    """ Model has been trained to handle images of different aspects ratios
+     resized to 224x224 in the range [-1, 1]. Bilinear and antialias resize
+     options are helpful to improve quality in some tasks. """
+
     image = np.asarray(image)
     if image.ndim == 2:  # Convert image without last channel into greyscale.
         image = np.stack((image,) * 3, axis=-1)
@@ -188,15 +171,15 @@ def preprocess_image(image, size=224):
 
 
 def preprocess_tokens(prefix, suffix=None, seqlen=None):
-    # Model has been trained to handle tokenized text composed of a prefix with
-    # full attention and a suffix with causal attention.
+    """ Model has been trained to handle tokenized text composed of a prefix with
+     full attention and a suffix with causal attention."""
     separator = "\n"
-    tokens = tokenizer.encode(prefix, add_bos=True) + tokenizer.encode(separator)
+    tokens = tokenizer.encode(prefix, add_bos=True) + tokenizer.encode(separator) # type: ignore
     mask_ar = [0] * len(tokens)  # 0 to use full attention for prefix.
     mask_loss = [0] * len(tokens)  # 0 to not use prefix tokens in the loss.
 
     if suffix:
-        suffix = tokenizer.encode(suffix, add_eos=True)
+        suffix = tokenizer.encode(suffix, add_eos=True) # type: ignore
         tokens += suffix
         mask_ar += [1] * len(suffix)  # 1 to use causal attention for suffix.
         mask_loss += [1] * len(suffix)  # 1 to use suffix tokens in the loss.
@@ -219,17 +202,15 @@ def postprocess_tokens(tokens):
         tokens = tokens[:eos_pos]
     except ValueError:
         pass
-    return tokenizer.decode(tokens)
+    return tokenizer.decode(tokens) # type: ignore
 
 
-# %% [markdown]
 # ### Create the training and validation iterators
 #
 # Create two iterators:
 #
-# *   A **training iterator** to allow the training process to go through the data in chunks rather than processing it all at once
-#     *   This allows you to do some data pre-processing before use
-# *   A **validation iterator** that allows the training process to iterate over the validation dataset to see how well the tuned model aligned with the provided results
+#  A training iterator to allow the training process to go through the data in chunks rather than processing it all at once. This allows you to do some data pre-processing before use
+# A validation iterator that allows the training process to iterate over the validation dataset to see how well the tuned model aligned with the provided results
 
 # %%
 SEQLEN = 128
