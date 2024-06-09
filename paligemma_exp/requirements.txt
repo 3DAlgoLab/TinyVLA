@@ -10,3 +10,6 @@ flax
 keras
 keras-nlp
 tensorflow 
+numpy
+scipy
+icecream
