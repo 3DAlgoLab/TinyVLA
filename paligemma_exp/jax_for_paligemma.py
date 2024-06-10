@@ -26,6 +26,7 @@ from big_vision.trainers.proj.paligemma import predict_fns
 import big_vision.datasets.jsonl
 import big_vision.utils
 import big_vision.sharding
+import jax.lib
 
 # Don't let TF use the GPU or TPUs
 tf.config.set_visible_devices([], "GPU")
@@ -75,8 +76,8 @@ model_config = ml_collections.FrozenConfigDict(
         },
     }
 )
-model = paligemma.Model(**model_config)
-tokenizer = sentencepiece.SentencePieceProcessor(TOKENIZER_PATH)
+model = paligemma.Model(**model_config)  # type: ignore
+tokenizer = sentencepiece.SentencePieceProcessor(TOKENIZER_PATH)  # type: ignore
 
 # Load params - this can take up to 1 minute in T4 colabs.
 params = paligemma.load(None, MODEL_PATH, model_config)
