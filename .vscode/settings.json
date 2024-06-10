@@ -4,8 +4,23 @@
   ],
   "peacock.remoteColor": "#1857a4",
   "cSpell.words": [
+    "argnames",
+    "clippo",
+    "cumsum",
+    "einops",
+    "fewshot",
+    "finfo",
     "fopen",
-    "SEQLEN"
+    "iinfo",
+    "jitted",
+    "logit",
+    "ndim",
+    "onehot",
+    "PRNG",
+    "SEQLEN",
+    "shardings",
+    "topk",
+    "zimg"
   ],
   "workbench.colorCustomizations": {
     "activityBar.activeBackground": "#1f6fd0",
