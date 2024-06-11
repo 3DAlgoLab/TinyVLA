@@ -63,21 +63,40 @@ def test_count2():
         print(value)
 
 
-def test_pytree1():
-    # A contrived example for pedagogical purposes
-    # (if your mind needs to attach some semantics to parse this - treat it as model params)
-    pytree_example = [
-        [1, "a", object()],
-        (1, (2, 3), ()),
-        [1, {"k1": 2, "k2": (3, 4)}, 5],
-        {"a": 2, "b": (2, 3)},
-        jnp.array([1, 2, 3]),
-    ]
+# A contrived example for pedagogical purposes
+# (if your mind needs to attach some semantics to parse this - treat it as model params)
+pytree_example = [
+    [1, "a", object()],
+    (1, (2, 3), ()),
+    [1, {"k1": 2, "k2": (3, 4)}, 5],
+    {"a": 2, "b": (2, 3)},
+    jnp.array([1, 2, 3]),
+]
 
+
+def test_pytree1():
     # Let's see how many leaves they have:
     for pytree in pytree_example:
         leaves = jax.tree_leaves(pytree)  # handy little function
         print(f"{repr(pytree):<45} has {len(leaves)} leaves: {leaves}")
+
+
+def test_pytree2():
+    leaves = jax.tree.leaves(pytree_example)
+    print(f"{repr(pytree_example):<45} has {len(leaves)} leaves: {leaves}")
+
+
+list_of_lists = [{"a": 3}, [1, 2, 3], [1, 2], [1, 2, 3, 4]]
+
+
+def test_pytree3():
+    l2 = jax.tree.map(lambda x: x * 2, list_of_lists)
+    print(l2)
+
+
+def test_pytree_multimap():
+    l3 = jax.tree.map(lambda x, y: x * y, list_of_lists, list_of_lists)
+    print(l3)
 
 
 if __name__ == "__main__":
@@ -85,4 +104,4 @@ if __name__ == "__main__":
     ic(jax.devices())
 
     # test_count2()
-    test_pytree1()
+    test_pytree_multimap()
