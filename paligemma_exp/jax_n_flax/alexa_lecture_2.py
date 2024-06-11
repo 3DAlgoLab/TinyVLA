@@ -132,13 +132,19 @@ def update(params, x, y, lr=0.01):
     return jax.tree.map(lambda p, g: p - lr * g, params, grads)
 
 
+def test_init_mlp_params():
+    params = init_mlp_params([1, 128, 128, 1])
+    params_shape = jax.tree.map(lambda x: x.shape, params)
+    print(params_shape)
+
+
 def test_toy_mlp_training():
     params = init_mlp_params([1, 128, 128, 1])
     key = random.PRNGKey(124)
     xs = random.normal(key, (128, 1))
-    ys = xs**2
+    ys = jnp.sin(xs)
 
-    num_epochs = 1_000
+    num_epochs = 2_000
     for i in range(num_epochs):
         params = update(params, xs, ys)
         if i % 100 == 0:
@@ -150,10 +156,26 @@ def test_toy_mlp_training():
     plt.savefig("toy_mlp_training.png")
 
 
-def test_init_mlp_params():
-    params = init_mlp_params([1, 128, 128, 1])
-    params_shape = jax.tree.map(lambda x: x.shape, params)
-    print(params_shape)
+class MyContainer:
+    def __init__(self, name, a, b, c):
+        self.name = name
+        self.a = a
+        self.b = b
+        self.c = c
+
+
+def test_custom_tree():
+    example_pytree = [MyContainer("alice", 1, 2, 3), MyContainer("bob", 4, 5, 6)]
+    leaves = jax.tree.leaves(example_pytree)
+    print(f"{repr(example_pytree):<45}\n has {len(leaves)} leaves:\n {leaves}")
+
+    # Wrong code.
+    # print(
+    #     jax.tree.map(lambda x: x + 1, example_pytree)
+    # )  # this will not work :/ it'd be nice if it did
+
+    flattened = jax.tree.flatten(example_pytree)
+    print(flattened)
 
 
 if __name__ == "__main__":
@@ -163,4 +185,5 @@ if __name__ == "__main__":
     # test_count2()
     # test_pytree_multimap()
     # test_init_mlp_params()
-    test_toy_mlp_training()
+    # test_toy_mlp_training()
+    test_custom_tree()
