@@ -10,8 +10,6 @@ from copy import deepcopy
 from typing import Tuple, NamedTuple
 import functools
 
-from pygame import init
-
 
 class Counter:
     def __init__(self):
@@ -149,7 +147,7 @@ def test_toy_mlp_training():
     plt.scatter(xs, ys)
     plt.scatter(xs, forward(params, xs), label="Model Prediction")
     plt.legend()
-    plt.show()
+    plt.savefig("toy_mlp_training.png")
 
 
 def test_init_mlp_params():
