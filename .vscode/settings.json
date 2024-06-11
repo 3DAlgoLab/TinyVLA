@@ -19,6 +19,8 @@
     "PRNG",
     "SEQLEN",
     "shardings",
+    "subkey",
+    "subkeys",
     "topk",
     "zimg"
   ],
