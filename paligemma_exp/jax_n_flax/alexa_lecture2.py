@@ -10,6 +10,8 @@ from copy import deepcopy
 from typing import Tuple, NamedTuple
 import functools
 
+from pygame import init
+
 
 class Counter:
     def __init__(self):
@@ -99,9 +101,68 @@ def test_pytree_multimap():
     print(l3)
 
 
+def init_mlp_params(layer_widths):
+    params = []
+    key = random.PRNGKey(123)
+
+    for n_in, n_out in zip(layer_widths[:-1], layer_widths[1:]):
+        key, subkey = random.split(key)
+        w = random.normal(subkey, (n_in, n_out)) * jnp.sqrt(2 / n_in)
+        b = jnp.ones((n_out,))
+        params.append(dict(weights=w, biases=b))
+
+    return params
+
+
+def forward(params, x):
+    *hidden, last = params
+    for layer in hidden:
+        x = jax.nn.relu(jnp.dot(x, layer["weights"]) + layer["biases"])
+
+    return jnp.dot(x, last["weights"]) + last["biases"]
+
+
+def loss_fn(params, x, y):
+    y_pred = forward(params, x)
+    return jnp.mean((y - y_pred) ** 2)
+
+
+@jit
+def update(params, x, y, lr=0.01):
+    grads = jax.grad(loss_fn)(params, x, y)
+    # SGD update
+    return jax.tree.map(lambda p, g: p - lr * g, params, grads)
+
+
+def test_toy_mlp_training():
+    params = init_mlp_params([1, 128, 128, 1])
+    key = random.PRNGKey(124)
+    xs = random.normal(key, (128, 1))
+    ys = xs**2
+
+    num_epochs = 1_000
+    for i in range(num_epochs):
+        params = update(params, xs, ys)
+        if i % 100 == 0:
+            print(f"Epoch: {i}, Loss: {loss_fn(params, xs, ys)}")
+
+    plt.scatter(xs, ys)
+    plt.scatter(xs, forward(params, xs), label="Model Prediction")
+    plt.legend()
+    plt.show()
+
+
+def test_init_mlp_params():
+    params = init_mlp_params([1, 128, 128, 1])
+    params_shape = jax.tree.map(lambda x: x.shape, params)
+    print(params_shape)
+
+
 if __name__ == "__main__":
     ic(jax.__version__)
     ic(jax.devices())
 
     # test_count2()
-    test_pytree_multimap()
+    # test_pytree_multimap()
+    # test_init_mlp_params()
+    test_toy_mlp_training()
