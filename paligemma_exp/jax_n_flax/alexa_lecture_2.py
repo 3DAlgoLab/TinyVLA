@@ -8,7 +8,10 @@ from jax import random, make_jaxpr
 import matplotlib.pyplot as plt
 from copy import deepcopy
 from typing import Tuple, NamedTuple
-import functools
+import os
+
+# TPU emulation
+os.environ["XLA_FLAGS"] = "--xla_force_host_platform_device_count=8"
 
 
 class Counter:
@@ -178,12 +181,86 @@ def test_custom_tree():
     print(flattened)
 
 
+class Point:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+
+    def __repr__(self):
+        return f"PointObject(x={self.x}, y={self.y})"
+
+
+def point_flatten(v):
+    children = (v.x, v.y)
+    aux_data = None
+    return (children, aux_data)
+
+
+def point_unflatten(aux_data, children):
+    return Point(*children)
+
+
+def test_custom_tree2():
+    jax.tree_util.register_pytree_node(Point, point_flatten, point_unflatten)
+    test_tree = jax.tree.map(lambda x: x + 1, [Point(1, 2), Point(3, 4)])
+    ic(test_tree)
+
+
+def test_another_tree():
+    zeros_tree = [jnp.zeros((2, 3)), jnp.zeros((3, 4))]
+    ic(zeros_tree)
+
+    shapes = jax.tree.map(lambda x: jnp.array(x.shape), zeros_tree)
+    ic(shapes)
+
+    ones_tree = jax.tree.map(jnp.ones, shapes)
+    ic(ones_tree)
+
+
+x = np.arange(5.0)
+w = np.array(
+    [
+        2,
+        3,
+        4,
+    ],
+    dtype=np.float32,
+)
+
+
+def test_pmap1():
+    # convolutional operation
+    def convolve(w, x):
+        output = []
+        for i in range(1, len(x) - 1):
+            output.append(jnp.dot(x[i - 1 : i + 2], w))
+
+        return jnp.array(output)
+
+    result = convolve(w, x)
+    ic(result)
+
+
+def test_pmap2():
+    n_devices = jax.local_device_count()
+    ic(n_devices)
+    xs = np.arange(5 * n_devices).reshape(-1, 5)
+    ic(xs)
+    ws = np.stack([w] * n_devices)
+
+    ic(xs.shape, ws.shape)
+
+
 if __name__ == "__main__":
     ic(jax.__version__)
     ic(jax.devices())
+
+    test_pmap2()
 
     # test_count2()
     # test_pytree_multimap()
     # test_init_mlp_params()
     # test_toy_mlp_training()
-    test_custom_tree()
+    # test_custom_tree()
+    # test_custom_tree2()
+    # test_another_tree()
