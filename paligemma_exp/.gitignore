@@ -168,3 +168,4 @@ paligemma_tokenizer.model
 number-ops-*
 fracture-detection-*
 databricks-dolly-15k.jsonl
+/*.png 

@@ -228,14 +228,16 @@ w = np.array(
 )
 
 
-def test_pmap1():
+def convolve(w, x):
     # convolutional operation
-    def convolve(w, x):
-        output = []
-        for i in range(1, len(x) - 1):
-            output.append(jnp.dot(x[i - 1 : i + 2], w))
+    output = []
+    for i in range(1, len(x) - 1):
+        output.append(jnp.dot(x[i - 1 : i + 2], w))
 
-        return jnp.array(output)
+    return jnp.array(output)
+
+
+def test_pmap1():
 
     result = convolve(w, x)
     ic(result)
@@ -250,12 +252,66 @@ def test_pmap2():
 
     ic(xs.shape, ws.shape)
 
+    vmap_result = jax.vmap(convolve)(ws, xs)
+    ic(vmap_result)
+
+    pmap_result = jax.pmap(convolve)(ws, xs)
+    ic(pmap_result)
+
+
+def test_pmap2_2():
+    n_devices = jax.local_device_count()
+    xs = np.arange(5 * n_devices).reshape(-1, 5)
+    pmap_result = jax.pmap(convolve, in_axes=(None, 0))(w, xs)
+    ic(pmap_result)
+
+
+def normalized_convolution(w, x):
+    output = []
+
+    for i in range(1, len(x) - 1):
+        output.append(jnp.dot(x[i - 1 : i + 2], w))
+
+    output = jnp.array(output)
+    # following line communication happens
+    return output / jax.lax.psum(output, axis_name="batch_dim")
+
+
+def test_pmap3():
+
+    n_devices = jax.local_device_count()
+    ic(n_devices)
+    xs = np.arange(5 * n_devices).reshape(-1, 5)
+    ic(xs)
+
+    res_pmap = jax.pmap(
+        normalized_convolution, axis_name="batch_dim", in_axes=(None, 0)
+    )(w, xs)
+    res_vmap = jax.vmap(
+        normalized_convolution, axis_name="batch_dim", in_axes=(None, 0)
+    )(w, xs)
+
+    print(repr(res_pmap))
+    print(repr(res_vmap))
+    print(f"Verify the output is normalized: {sum(res_pmap[:, 0])}")
+
+
+def test_value_and_grad():
+    def sum_squared_error(x, y):
+        return jnp.sum((x - y) ** 2)
+
+    x = jnp.arange(4, dtype=jnp.float32)
+    y = x + 0.1
+    ic(jax.value_and_grad(sum_squared_error)(x, y))
+
 
 if __name__ == "__main__":
     ic(jax.__version__)
     ic(jax.devices())
 
-    test_pmap2()
+    # test_pmap2_2()
+    test_pmap3()
+    # test_value_and_grad()
 
     # test_count2()
     # test_pytree_multimap()
