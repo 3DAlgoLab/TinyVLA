@@ -144,6 +144,8 @@ def parameter_overview(params):
 print(" == Model params == ")
 parameter_overview(params)
 
+# %%
+
 
 def preprocess_image(image, size=224):
     """Model has been trained to handle images of different aspects ratios

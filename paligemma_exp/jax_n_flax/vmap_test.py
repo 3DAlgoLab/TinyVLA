@@ -3,13 +3,13 @@ import jax
 import jax.numpy as jnp
 
 x = jnp.arange(5)
-w = jnp.array([2., 3., 4.])
+w = jnp.array([2.0, 3.0, 4.0])
 
 
 def convolve(x, w):
     output = []
     for i in range(1, len(x) - 1):
-        output.append(jnp.dot(x[i - 1:i + 2], w))
+        output.append(jnp.dot(x[i - 1 : i + 2], w))
     return jnp.array(output)
 
 
@@ -22,7 +22,7 @@ ws = jnp.stack([w, w])
 def manually_vectorized_convolve(xs, ws):
     output = []
     for i in range(1, xs.shape[-1] - 1):
-        output.append(jnp.sum(xs[:, i - 1:i + 2] * ws, axis=1))
+        output.append(jnp.sum(xs[:, i - 1 : i + 2] * ws, axis=1))
     return jnp.stack(output, axis=1)
 
 

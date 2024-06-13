@@ -11,8 +11,8 @@ ic(arr.devices())
 
 P = jax.sharding.PartitionSpec
 devices = mesh_utils.create_device_mesh((2, 4))
-mesh = jax.sharding.Mesh(devices, ('x', 'y'))
-sharding = jax.sharding.NamedSharding(mesh, P('x', 'y'))
+mesh = jax.sharding.Mesh(devices, ("x", "y"))
+sharding = jax.sharding.NamedSharding(mesh, P("x", "y"))
 ic(sharding)
 
 arr_sharded = jax.device_put(arr, sharding)
@@ -33,8 +33,8 @@ ic(result.sharding == arr_sharded.sharding)
 def f_contract_2(x):
     out = x.sum(axis=0)
     devices = mesh_utils.create_device_mesh(8)
-    mesh = jax.sharding.Mesh(devices, 'x')
-    sharding = jax.sharding.NamedSharding(mesh, P('x'))
+    mesh = jax.sharding.Mesh(devices, "x")
+    sharding = jax.sharding.NamedSharding(mesh, P("x"))
     return jax.lax.with_sharding_constraint(out, sharding)
 
 
