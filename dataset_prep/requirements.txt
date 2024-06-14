@@ -1,6 +1,6 @@
 rlds[tensorflow]
 ipykernel
 ipywidgets
-dm-reverb-nightly
+# dm-reverb-nightly
 tfds-nightly
 icecream
