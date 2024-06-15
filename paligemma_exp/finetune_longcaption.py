@@ -28,6 +28,8 @@ import big_vision.utils
 import big_vision.sharding
 import jax.lib
 
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+
 # Don't let TF use the GPU or TPUs
 tf.config.set_visible_devices([], "GPU")
 tf.config.set_visible_devices([], "TPU")
@@ -39,7 +41,6 @@ print(f"JAX devices:  {jax.device_count()}")
 
 
 # %%
-import os
 import kagglehub
 
 MODEL_PATH = "./pt_224_128.params.f16.npz"
