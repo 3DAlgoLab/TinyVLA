@@ -161,3 +161,4 @@ cython_debug/
 wandb/
 benchmark/sac_slider_left.zip
 paligemma_exp/toy_mlp_training.png
+vla_pg/paligemma_tokenizer.model
