@@ -328,18 +328,23 @@ def make_predictions(
 
         # Append to html output.
         for example, label, response in zip(examples, labels, responses):
-            outputs.append((example["text"], example["image"], label, response))
+            outputs.append(
+                (postprocess_tokens(example["text"]), example["image"], label, response)
+            )
             if num_examples is not None and len(outputs) >= num_examples:
                 return outputs
 
 
 def train(params):
-    BATCH_SIZE = 24
-    TRAIN_EXAMPLES = 24_000
+    BATCH_SIZE = 32
+    TRAIN_EXAMPLES = 32 * 1_000
     LEARNING_RATE = 0.03
 
     TRAIN_STEPS = TRAIN_EXAMPLES // BATCH_SIZE
     EVAL_STEPS = TRAIN_STEPS // 4
+
+    print("Train Steps: ", TRAIN_STEPS)
+    print("Eval Steps: ", EVAL_STEPS)
 
     train_data_it = train_data_iterator()
 
