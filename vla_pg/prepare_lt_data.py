@@ -1,12 +1,13 @@
 # %% Check Sentence Piece Model(Tokenizer)
-from email.mime import image
-import sentencepiece as spm
-import os
-from icecream import ic
-import numpy as np
-import tensorflow_datasets as tfds
+
 import json
+import os
 from pathlib import Path
+
+import numpy as np
+import sentencepiece as spm
+import tensorflow_datasets as tfds
+from icecream import ic
 from PIL import Image
 
 # %%
@@ -25,7 +26,7 @@ def download_tokenizer(tokenizer_path=TOKENIZER_PATH):
         print(f"Tokenizer file: {tokenizer_path} is already downloaded")
 
 
-def check_action_tokens():
+def check_action_tokens(tokenizer_path=TOKENIZER_PATH):
     sp = spm.SentencePieceProcessor(tokenizer_path)  # type: ignore
 
     start_id = 256_000
@@ -90,11 +91,14 @@ def generate_jsonl_data(
     episode_num=5,
     out_data_folder="./data/language_table_mini",
     dataset_path=DATASET_PATH,
+    episode_skip=None,
 ):
     builder = tfds.builder_from_directory(dataset_path)
     episode_ds = builder.as_dataset(split="train")
 
     # print(episode_ds.element_spec)
+    if episode_skip is not None:
+        episode_ds = episode_ds.skip(episode_skip)
     episodes_iter = iter(episode_ds.take(episode_num))  # type: ignore
     frames = []
     actions = []
@@ -108,8 +112,9 @@ def generate_jsonl_data(
     # ensure out_data_folder exists
     out_data_folder = Path(out_data_folder)
     out_data_folder.mkdir(parents=True, exist_ok=True)
-    attrib_filename = Path(out_data_folder) / "_annotations.train.jsonl"
+    attrib_filename = Path(out_data_folder) / "_annotations.jsonl"
 
+    instruction_template = "What should the robot do to {task}?"
     with open(attrib_filename, "w") as f:
         print("Total Frames:", len(frames))
         for i, (instruction, frame, action) in enumerate(
@@ -118,7 +123,9 @@ def generate_jsonl_data(
             image_file_name = f"frame_{i:08_}.png"
             frame_path = out_data_folder / image_file_name
             action_str = language_table_action_to_rt2_action_string(action)
-            element = dict(prefix=instruction, image=image_file_name, suffix=action_str)
+
+            prefix_str = instruction_template.format(task=instruction)
+            element = dict(prefix=prefix_str, image=image_file_name, suffix=action_str)
             Image.fromarray(frame).save(frame_path)
             f.write(f"{json.dumps(element)}\n")
 
@@ -142,4 +149,5 @@ if __name__ == "__main__":
     # str2 = language_table_action_to_rt2_action_string(sample_action1)
     # print(str2)
 
-    generate_jsonl_data(5, "./data/language_table_mini")
+    # generate_jsonl_data(100, "./data/language_table_mini_train")
+    generate_jsonl_data(1, "./data/language_table_mini_test", episode_skip=None)
