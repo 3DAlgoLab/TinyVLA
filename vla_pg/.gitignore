@@ -160,14 +160,3 @@ cython_debug/
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
-
-# big_vision_repo
-longcap100
-paligemma_tokenizer.model
-*.npz
-number-ops-*
-fracture-detection-*
-databricks-dolly-15k.jsonl
-/*.png 
-big_vision
-logcap100/

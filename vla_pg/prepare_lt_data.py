@@ -2,15 +2,16 @@
 
 import json
 import os
+import shutil
 from pathlib import Path
 
 import numpy as np
 import sentencepiece as spm
 import tensorflow_datasets as tfds
-from icecream import ic
+
+# from icecream import ic
 from PIL import Image
 
-# %%
 
 TOKENIZER_PATH = "./paligemma_tokenizer.model"
 
@@ -111,6 +112,7 @@ def generate_jsonl_data(
 
     # ensure out_data_folder exists
     out_data_folder = Path(out_data_folder)
+    shutil.rmtree(out_data_folder, ignore_errors=True)
     out_data_folder.mkdir(parents=True, exist_ok=True)
     attrib_filename = Path(out_data_folder) / "_annotations.jsonl"
 
@@ -149,5 +151,5 @@ if __name__ == "__main__":
     # str2 = language_table_action_to_rt2_action_string(sample_action1)
     # print(str2)
 
-    # generate_jsonl_data(100, "./data/language_table_mini_train")
-    generate_jsonl_data(1, "./data/language_table_mini_test", episode_skip=None)
+    generate_jsonl_data(100, "./data/language_table_mini_train")
+    generate_jsonl_data(5, "./data/language_table_mini_valid", episode_skip=100)

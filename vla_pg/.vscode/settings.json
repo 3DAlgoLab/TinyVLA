@@ -1,0 +1,20 @@
+{
+  "cSpell.words": [
+    "colabs",
+    "detokenize",
+    "greyscale",
+    "longcap",
+    "ndim",
+    "postprocess",
+    "pplx",
+    "reshard",
+    "seqlen",
+    "SEQLEN",
+    "Shardings",
+    "tfdata",
+    "TPUs",
+    "treedef",
+    "txts"
+  ],
+  "peacock.remoteColor": "#f9e64f"
+}
