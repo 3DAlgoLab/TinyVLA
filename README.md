@@ -7,4 +7,4 @@ Tiny Vision Language Action Model for Robot Control.
 - Original architecture is based on tiny but robust VLM(Vision Language Models) like `MiniCPM-V2`, `TinyLLaVA`, `PaliGemma` and etc. 
 
 ## Folder Structure
-- `vla_pg`: PaliGemma based VLA model.
+- `paligemma_based`: PaliGemma based VLA model.
