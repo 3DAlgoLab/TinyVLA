@@ -336,8 +336,8 @@ def make_predictions(
 
 
 def train(params):
-    BATCH_SIZE = 32
-    TRAIN_EXAMPLES = 32 * 1_000
+    BATCH_SIZE = 16
+    TRAIN_EXAMPLES = 16 * 50
     LEARNING_RATE = 0.03
 
     TRAIN_STEPS = TRAIN_EXAMPLES // BATCH_SIZE
