@@ -6,6 +6,10 @@ import io
 import os
 import warnings
 
+# Import big vision utilities
+import big_vision.datasets.jsonl
+import big_vision.sharding
+import big_vision.utils
 import jax
 import jax.lib
 import jax.numpy as jnp
@@ -14,17 +18,12 @@ import ml_collections
 import numpy as np
 import sentencepiece
 import tensorflow as tf
-from IPython.core.display import HTML, display
-from PIL import Image
-
-# Import big vision utilities
-import big_vision.datasets.jsonl
-import big_vision.sharding
-import big_vision.utils
 
 # Import model definition from big_vision
 from big_vision.models.proj.paligemma import paligemma
 from big_vision.trainers.proj.paligemma import predict_fns
+from IPython.core.display import HTML, display
+from PIL import Image
 
 SEQLEN = 128
 
@@ -337,11 +336,11 @@ def make_predictions(
 
 def train(params):
     BATCH_SIZE = 16
-    TRAIN_EXAMPLES = 16 * 50
+    TRAIN_EXAMPLES = 2048 * 100
     LEARNING_RATE = 0.03
 
     TRAIN_STEPS = TRAIN_EXAMPLES // BATCH_SIZE
-    EVAL_STEPS = TRAIN_STEPS // 4
+    EVAL_STEPS = min(TRAIN_STEPS // 4, 100)
 
     print("Train Steps: ", TRAIN_STEPS)
     print("Eval Steps: ", EVAL_STEPS)
@@ -426,5 +425,12 @@ if __name__ == "__main__":
     show_train_samples()
     # %%
     train(params=params)
+
+    # %%
+    # save the model
+    flat, _ = big_vision.utils.tree_flatten_with_names(params)
+    TARGET_MODEL_PATH = "./paligemma-3b-pt-224-ltft.f16.npz"
+    with open(TARGET_MODEL_PATH, "wb") as f:
+        np.savez(f, **{k: v for k, v in flat})
 
 # %%
