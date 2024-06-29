@@ -1,0 +1,32 @@
+img/Transformer/encoder_norm/bias                                                (1152,)                float16
+img/Transformer/encoder_norm/scale                                               (1152,)                float16
+img/Transformer/encoderblock/LayerNorm_0/bias                                    (27, 1152)             float16
+img/Transformer/encoderblock/LayerNorm_0/scale                                   (27, 1152)             float16
+img/Transformer/encoderblock/LayerNorm_1/bias                                    (27, 1152)             float16
+img/Transformer/encoderblock/LayerNorm_1/scale                                   (27, 1152)             float16
+img/Transformer/encoderblock/MlpBlock_0/Dense_0/bias                             (27, 4304)             float16
+img/Transformer/encoderblock/MlpBlock_0/Dense_0/kernel                           (27, 1152, 4304)       float16
+img/Transformer/encoderblock/MlpBlock_0/Dense_1/bias                             (27, 1152)             float16
+img/Transformer/encoderblock/MlpBlock_0/Dense_1/kernel                           (27, 4304, 1152)       float16
+img/Transformer/encoderblock/MultiHeadDotProductAttention_0/key/bias             (27, 16, 72)           float16
+img/Transformer/encoderblock/MultiHeadDotProductAttention_0/key/kernel           (27, 1152, 16, 72)     float16
+img/Transformer/encoderblock/MultiHeadDotProductAttention_0/out/bias             (27, 1152)             float16
+img/Transformer/encoderblock/MultiHeadDotProductAttention_0/out/kernel           (27, 16, 72, 1152)     float16
+img/Transformer/encoderblock/MultiHeadDotProductAttention_0/query/bias           (27, 16, 72)           float16
+img/Transformer/encoderblock/MultiHeadDotProductAttention_0/query/kernel         (27, 1152, 16, 72)     float16
+img/Transformer/encoderblock/MultiHeadDotProductAttention_0/value/bias           (27, 16, 72)           float16
+img/Transformer/encoderblock/MultiHeadDotProductAttention_0/value/kernel         (27, 1152, 16, 72)     float16
+img/embedding/bias                                                               (1152,)                float16
+img/embedding/kernel                                                             (14, 14, 3, 1152)      float16
+img/head/bias                                                                    (2048,)                float16
+img/head/kernel                                                                  (1152, 2048)           float16
+img/pos_embedding                                                                (1, 256, 1152)         float16
+llm/embedder/input_embedding                                                     (257152, 2048)         float16
+llm/final_norm/scale                                                             (2048,)                float16
+llm/layers/attn/attn_vec_einsum/w                                                (18, 8, 256, 2048)     float16
+llm/layers/attn/kv_einsum/w                                                      (18, 2, 1, 2048, 256)  float16
+llm/layers/attn/q_einsum/w                                                       (18, 8, 2048, 256)     float16
+llm/layers/mlp/gating_einsum                                                     (18, 2, 2048, 16384)   float16
+llm/layers/mlp/linear                                                            (18, 16384, 2048)      float16
+llm/layers/pre_attention_norm/scale                                              (18, 2048)             float16
+llm/layers/pre_ffw_norm/scale                                                    (18, 2048)             float16
