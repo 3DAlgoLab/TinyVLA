@@ -10,7 +10,8 @@ import big_vision.utils
 def parameter_overview(params, file_name="parameters_paligemma.txt"):
     with open(file_name, "wt") as f:
         for path, arr in big_vision.utils.tree_flatten_with_names(params)[0]:
-            f.write(f"{path:80s} {str(arr.shape):22s} {arr.dtype}\n")
+            f.write(f"{path} {str(arr.shape)} {arr.dtype}\n")
+            # f.write(f"{path:80s} {str(arr.shape):22s} {arr.dtype}\n")
 
 
 def check_pretrained_model():
