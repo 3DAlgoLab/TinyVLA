@@ -24,7 +24,7 @@ img/pos_embedding (1, 256, 1152) float16
 llm/embedder/input_embedding (257152, 2048) float16
 llm/final_norm/scale (2048,) float16
 llm/layers/attn/attn_vec_einsum/w (18, 8, 256, 2048) float16
-llm/layers/attn/kv_einsum/w (18, 2, 1, 2048, 256) float16
+llm/layers/attn/kv_einsum/w (18, 2, 1, 2048, 256) float16 
 llm/layers/attn/q_einsum/w (18, 8, 2048, 256) float16
 llm/layers/mlp/gating_einsum (18, 2, 2048, 16384) float16
 llm/layers/mlp/linear (18, 16384, 2048) float16

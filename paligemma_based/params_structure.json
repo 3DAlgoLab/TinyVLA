@@ -1,0 +1,205 @@
+{
+  "img": {
+    "Transformer": {
+      "encoder_norm": {
+        "bias": [
+          1152
+        ],
+        "scale": [
+          1152
+        ]
+      },
+      "encoderblock": {
+        "LayerNorm_0": {
+          "bias": [
+            27,
+            1152
+          ],
+          "scale": [
+            27,
+            1152
+          ]
+        },
+        "LayerNorm_1": {
+          "bias": [
+            27,
+            1152
+          ],
+          "scale": [
+            27,
+            1152
+          ]
+        },
+        "MlpBlock_0": {
+          "Dense_0": {
+            "bias": [
+              27,
+              4304
+            ],
+            "kernel": [
+              27,
+              1152,
+              4304
+            ]
+          },
+          "Dense_1": {
+            "bias": [
+              27,
+              1152
+            ],
+            "kernel": [
+              27,
+              4304,
+              1152
+            ]
+          }
+        },
+        "MultiHeadDotProductAttention_0": {
+          "key": {
+            "bias": [
+              27,
+              16,
+              72
+            ],
+            "kernel": [
+              27,
+              1152,
+              16,
+              72
+            ]
+          },
+          "out": {
+            "bias": [
+              27,
+              1152
+            ],
+            "kernel": [
+              27,
+              16,
+              72,
+              1152
+            ]
+          },
+          "query": {
+            "bias": [
+              27,
+              16,
+              72
+            ],
+            "kernel": [
+              27,
+              1152,
+              16,
+              72
+            ]
+          },
+          "value": {
+            "bias": [
+              27,
+              16,
+              72
+            ],
+            "kernel": [
+              27,
+              1152,
+              16,
+              72
+            ]
+          }
+        }
+      }
+    },
+    "embedding": {
+      "bias": [
+        1152
+      ],
+      "kernel": [
+        14,
+        14,
+        3,
+        1152
+      ]
+    },
+    "head": {
+      "bias": [
+        2048
+      ],
+      "kernel": [
+        1152,
+        2048
+      ]
+    },
+    "pos_embedding": [
+      1,
+      256,
+      1152
+    ]
+  },
+  "llm": {
+    "embedder": {
+      "input_embedding": [
+        257152,
+        2048
+      ]
+    },
+    "final_norm": {
+      "scale": [
+        2048
+      ]
+    },
+    "layers": {
+      "attn": {
+        "attn_vec_einsum": {
+          "w": [
+            18,
+            8,
+            256,
+            2048
+          ]
+        },
+        "kv_einsum": {
+          "w": [
+            18,
+            2,
+            1,
+            2048,
+            256
+          ]
+        },
+        "q_einsum": {
+          "w": [
+            18,
+            8,
+            2048,
+            256
+          ]
+        }
+      },
+      "mlp": {
+        "gating_einsum": [
+          18,
+          2,
+          2048,
+          16384
+        ],
+        "linear": [
+          18,
+          16384,
+          2048
+        ]
+      },
+      "pre_attention_norm": {
+        "scale": [
+          18,
+          2048
+        ]
+      },
+      "pre_ffw_norm": {
+        "scale": [
+          18,
+          2048
+        ]
+      }
+    }
+  }
+}

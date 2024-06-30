@@ -51,35 +51,19 @@ def merge_lora_params():
 def get_transformer_config_from_params(params, cache_size: int = 1024) -> dict:
     """Creates a TransformerConfig from loaded parameters."""
 
-    params_llm = params["llm"]
-    print(params_llm.keys())
+    num_layers, hidden_dim, embed_dim = params["llm"]["layers"]["mlp"]["linear"].shape
 
-    num_layers = (
-        max(
-            [
-                int(k.split("_")[1])
-                for k in params_llm["transformer"].keys()
-                if "layer_" in k
-            ]
-        )
-        + 1
-    )
+    _, num_heads, head_dim, _ = params["llm"]["layers"]["attn"]["attn_vec_einsum"][
+        "w"
+    ].shape
 
-    hidden_dim, embed_dim = params_llm["transformer"]["layer_0"]["mlp"]["linear"].shape
-
-    num_heads, head_dim, _ = params_llm["transformer"]["layer_0"]["attn"][
-        "attn_vec_einsum"
-    ]["w"].shape
-
-    use_qkv_einsum = "qkv_einsum" in params_llm["transformer"]["layer_0"]["attn"]
+    use_qkv_einsum = "qkv_einsum" in params["llm"]["layers"]["attn"]
     if use_qkv_einsum:
         num_kv_heads = num_heads
     else:
-        num_kv_heads = params_llm["transformer"]["layer_0"]["attn"]["kv_einsum"][
-            "w"
-        ].shape[1]
+        num_kv_heads = params["llm"]["layers"]["attn"]["kv_einsum"]["w"].shape[2]
 
-    num_embed = params_llm["transformer"]["embedder"]["input_embedding"].shape[0]
+    num_embed = params["llm"]["embedder"]["input_embedding"].shape[0]
 
     return dict(
         num_layers=num_layers,
@@ -150,7 +134,7 @@ def train_lora(config: PaliGemmaConfig, train_dataset, checkpoint_dir, verbose=T
     model_config = get_transformer_config_from_params(params)
     num_gpus = jax.device_count("gpu")
     devices = mesh_utils.create_device_mesh((num_gpus,))
-    default_mesh = Mesh(devices, axis_names=("P",))
+    default_mesh = Mesh(devices, axis_names=("p",))
 
     def mesh_sharding(p_spec: P, mesh=None) -> NamedSharding:
         if mesh is None:
