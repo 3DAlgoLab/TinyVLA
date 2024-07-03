@@ -1,27 +1,38 @@
 # Define the mesh
+import functools
+import io
 import math
 import os
+import pickle
 from dataclasses import dataclass
-from typing import Dict
+from typing import Callable, Dict, Optional
 
+import big_vision.utils
 import jax
 import jax.numpy as jnp
 import jax.random as rand
 import kagglehub
 import ml_collections
+import numpy as np
 import optax
 import sentencepiece
+import tensorflow as tf
 import tree
+from big_vision.datasets import jsonl
 from big_vision.models.proj.paligemma import paligemma
 from big_vision.trainers.proj.paligemma import predict_fns
 from jax.experimental import mesh_utils
 from jax.sharding import Mesh, NamedSharding
 from jax.sharding import PartitionSpec as P
 from jax.sharding import PositionalSharding
+from PIL import Image
 from rich.progress import Progress
-from tqdm import tqdm
+
+import util
 
 # device setup
+tf.config.set_visible_devices([], "GPU")
+
 cpu_devices = jax.devices("cpu")
 gpu_devices = jax.devices("gpu")
 gpu_sharding_mp = PositionalSharding(gpu_devices)
@@ -41,7 +52,7 @@ class PaliGemmaConfig:
     BATCH_SIZE: int = 8
     N_ACCUMULATION_STEPS: int = 2
     MAX_SEQ_LEN: int = 128
-    N_EPOCHS: int = 7
+    N_EPOCHS: int = 1
     SEED: int = 420
     CACHE_SIZE: int = 30  # number of steps in the transformer's cache ?
     TOKENIZER_PATH: str = "./paligemma_tokenizer.model"
@@ -119,32 +130,36 @@ def load_model(ckpt_path: str):
 def merge_lora_params(params, lora_params: Dict):
     def merge_fn(path, v):
         # h - num heads, m - model dim, r - lora dim, k - key dim, v - value dim
+        # l - num index for 18 layers
         if "kv_einsum" in path:
             v_lora_A = lora_params[path]["v_lora_A"]
             v_lora_B = lora_params[path]["v_lora_B"]
-            merged_V = v[1] + jnp.einsum(
-                "hmr,hrk->hmk", v_lora_A, v_lora_B
+            merged_V = v[:, 1:2] + jnp.einsum(
+                "lhmr,lhrk->lhmk", v_lora_A, v_lora_B
             )  # this gives us the same dimension as v[1]
-            return jnp.stack([v[0], merged_V])
+
+            return jnp.concatenate([v[:, 0:1], merged_V], axis=1)
+
         elif "q_einsum" in path:
             return v + jnp.einsum(
-                "hmr,hrv->hmv",
+                "lhmr,lhrv->lhmv",
                 lora_params[path]["q_lora_A"],
                 lora_params[path]["q_lora_B"],
             )
         elif "qkv_einsum" in path:
-            q_ = v[0]
-            k_ = v[1]
-            v_ = v[2]
+            # WARNING: Assume the first axis would be layers(n_layers), presented as 'l'
+            q_ = v[:, 0:1]
+            k_ = v[:, 1:2]
+            v_ = v[:, 2:3]
             q_lora_A = lora_params[path]["q_lora_A"]
             q_lora_B = lora_params[path]["q_lora_B"]
             v_lora_A = lora_params[path]["v_lora_A"]
             v_lora_B = lora_params[path]["v_lora_B"]
 
-            merged_q = q_ + jnp.einsum("hmr,hrk->hmk", q_lora_A, q_lora_B)
-            merged_v = v_ + jnp.einsum("hmr,hrk->hmk", v_lora_A, v_lora_B)
+            merged_q = q_ + jnp.einsum("lhmr,lhrk->lhmk", q_lora_A, q_lora_B)
+            merged_v = v_ + jnp.einsum("lhmr,lhrk->lhmk", v_lora_A, v_lora_B)
 
-            return jnp.stack([merged_q, k_, merged_v])
+            return jnp.concatenate([merged_q, k_, merged_v], axis=1)
         else:
             return v
 
@@ -152,19 +167,109 @@ def merge_lora_params(params, lora_params: Dict):
     return merged_params
 
 
-def train_lora(config: PaliGemmaConfig, train_dataset, checkpoint_dir, verbose=True):
+def preprocess_image(image, size=224):
+    """Model has been trained to handle images of different aspects ratios
+    resized to 224x224 in the range [-1, 1]. Bilinear and antialias resize
+    options are helpful to improve quality in some tasks."""
 
-    global optimize
+    image = np.asarray(image)
+    if image.ndim == 2:  # Convert image without last channel into greyscale.
+        image = np.stack((image,) * 3, axis=-1)
+    image = image[..., :3]  # Remove alpha layer.
+    assert image.shape[-1] == 3
+
+    image = tf.constant(image)
+    image = tf.image.resize(image, (size, size), method="bilinear", antialias=True)
+    return image.numpy() / 127.5 - 1.0  # [0, 255]->[-1,1]
+
+
+def preprocess_tokens(tokenizer, prefix, suffix=None, seqlen=None):
+    """Model has been trained to handle tokenized text composed of a prefix with
+    full attention and a suffix with causal attention."""
+    separator = "\n"
+    tokens = tokenizer.encode(prefix, add_bos=True) + tokenizer.encode(separator)  # type: ignore
+    mask_ar = [0] * len(tokens)  # 0 to use full attention for prefix.
+    mask_loss = [0] * len(tokens)  # 0 to not use prefix tokens in the loss.
+
+    if suffix:
+        suffix = tokenizer.encode(suffix, add_eos=True)  # type: ignore
+        tokens += suffix
+        mask_ar += [1] * len(suffix)  # 1 to use causal attention for suffix.
+        mask_loss += [1] * len(suffix)  # 1 to use suffix tokens in the loss.
+
+    mask_input = [1] * len(tokens)  # 1 if it's a token, 0 if padding.
+    if seqlen:
+        padding = [0] * max(0, seqlen - len(tokens))
+        tokens = tokens[:seqlen] + padding
+        mask_ar = mask_ar[:seqlen] + padding
+        mask_loss = mask_loss[:seqlen] + padding
+        mask_input = mask_input[:seqlen] + padding
+
+    return jax.tree.map(np.array, (tokens, mask_ar, mask_loss, mask_input))
+
+
+def postprocess_tokens(tokenizer, tokens):
+    tokens = tokens.tolist()  # np.array to list[int]
+    try:  # Remove tokens at and after EOS if any.
+        eos_pos = tokens.index(tokenizer.eos_id())
+        tokens = tokens[:eos_pos]
+    except ValueError:
+        pass
+    return tokenizer.decode(tokens)  # type: ignore
+
+
+def gen_data_iterator(tf_dataset, tokenizer, seq_length=128):
+    dataset = tf_dataset
+    for example in dataset.as_numpy_iterator():
+        image = Image.open(io.BytesIO(example["image"]))  # type: ignore
+        image = preprocess_image(image)
+
+        # prefix = "caption en"  # Could also be a different prefix per example.
+        prefix = example["prefix"].decode().lower()  # type: ignore
+        suffix = example["suffix"].decode().lower()  # type: ignore
+        tokens, mask_ar, mask_loss, _ = preprocess_tokens(
+            tokenizer, prefix, suffix, seq_length
+        )
+        label, _, _, _ = preprocess_tokens(tokenizer, suffix, seqlen=seq_length)
+
+        yield {
+            "image": np.asarray(image),
+            "text": np.asarray(tokens),
+            "label": np.asarray(label),
+            "mask_ar": np.asarray(mask_ar),
+            "mask_loss": np.asarray(mask_loss),
+        }
+
+
+def train_lora(
+    config: PaliGemmaConfig,
+    checkpoint_dir: str,
+    train_dataset,
+    val_dataset,
+    verbose=True,
+    checkpoint_prefix="lora",
+):
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
+    mesh = jax.sharding.Mesh(jax.devices(), ("data"))
+    data_sharding = jax.sharding.NamedSharding(mesh, jax.sharding.PartitionSpec("data"))
+
     download_tokenizer(config.TOKENIZER_PATH)
     tokenizer = sentencepiece.SentencePieceProcessor(config.TOKENIZER_PATH)  # type: ignore
-    dataset = train_dataset
-    key = rand.PRNGKey(config.SEED)
 
+    key = rand.PRNGKey(config.SEED)
     with jax.default_device(cpu_device):
         ckpt_path = download_model(config.MODEL_PATH)
         model, params = load_model(ckpt_path)
 
+    # Define `decode` function to sample outputs from the model.
+    decode_fn = predict_fns.get_all(model)["decode"]
+    decode = functools.partial(
+        decode_fn, devices=jax.devices(), eos_token=tokenizer.eos_id()
+    )
+
     model_config = get_transformer_config_from_params(params)
+
     num_gpus = jax.device_count("gpu")
     devices = mesh_utils.create_device_mesh((num_gpus,))
     default_mesh = Mesh(devices, axis_names=("p",))
@@ -250,8 +355,8 @@ def train_lora(config: PaliGemmaConfig, train_dataset, checkpoint_dir, verbose=T
                 q_lora_B = jnp.zeros(q_B_shape, dtype=jnp.bfloat16)
 
             lora_map[path] = {"q_lora_A": q_lora_A, "q_lora_B": q_lora_B}
-
             return jax.device_put(v, mesh_sharding(P("p", None, None)))
+
         elif "qkv_einsum" in path:
             # WARNING: Assume the first axis would be layers(n_layers)
             # v.shape (n_layers, 3, n_heads, d_m, d_k)
@@ -404,10 +509,19 @@ def train_lora(config: PaliGemmaConfig, train_dataset, checkpoint_dir, verbose=T
                 ),
             )
 
+    util.params_to_json(lora_map, "lora_params.json")
     if is_process_0 and verbose:
         print("Successfully loaded and sharded model parameters!")
 
-    n_steps = math.ceil(len(dataloader) / config.N_ACCUMULATION_STEPS)
+    # prepare train data & validation iterator
+    num_batches = train_dataset.total_examples // config.BATCH_SIZE
+    train_dataset = train_dataset.get_tfdata().shuffle(1_000).repeat()
+    val_dataset = val_dataset.get_tfdata(ordered=True)
+
+    train_data_iter = gen_data_iterator(train_dataset, tokenizer)
+    val_data_iter = gen_data_iterator(val_dataset, tokenizer)
+
+    n_steps = math.ceil(num_batches / config.N_ACCUMULATION_STEPS)
     schedule = optax.warmup_cosine_decay_schedule(
         init_value=0.0,
         peak_value=config.LR,
@@ -417,16 +531,138 @@ def train_lora(config: PaliGemmaConfig, train_dataset, checkpoint_dir, verbose=T
     )
     optimizer = optax.adamw(learning_rate=schedule)
     optimizer = optax.MultiSteps(optimizer, config.N_ACCUMULATION_STEPS)
-    optimize = optimizer.update
-
-    # opt_state = optimizer.init(params)
     opt_state = optimizer.init(lora_map)
 
-    num_batches = len(dataloader)
     verbosity_freq = num_batches // 100
     jax.clear_caches()
+
+    # Training Loop
+    n_train_steps = num_batches
+    progress = Progress()
+    p_task_epoch = progress.add_task("[red]Epochs...", total=config.N_EPOCHS)
+    p_task_step = progress.add_task("[green]Batches...", total=n_train_steps)
+    progress.start()
+
+    @functools.partial(jax.jit, donate_argnums=(0,))
+    def update_fn(lora_params, params, opt_state, batch):
+        imgs, txts, mask_ar = batch["image"], batch["text"], batch["mask_ar"]
+
+        def loss_fn(lora_params, pretrained_params):
+            params_merged = merge_lora_params(pretrained_params, lora_params)
+
+            text_logits, _ = model.apply(
+                {"params": params_merged},  # type: ignore
+                imgs,
+                txts[:, :-1],
+                mask_ar[:, :-1],
+                train=True,
+            )
+            logp = jax.nn.log_softmax(text_logits, axis=-1)
+
+            # The model takes as input txts[:, :-1] but the loss is defined as predicting
+            # next tokens txts[:, 1:]. Additionally, mask_loss[:, 1:] indicates which tokens
+            # are part of the loss (e.g. prefix and padded tokens are not included).
+            mask_loss = batch["mask_loss"][:, 1:]
+            targets = jax.nn.one_hot(txts[:, 1:], text_logits.shape[-1])
+
+            # Compute the loss per example. i.e. the mean of per token pplx.
+            # Since each example has a different number of tokens we normalize it.
+            token_pplx = jnp.sum(logp * targets, axis=-1)  # sum across vocab_size.
+            example_loss = -jnp.sum(
+                token_pplx * mask_loss, axis=-1
+            )  # sum across seq_len.
+            example_loss /= jnp.clip(
+                jnp.sum(mask_loss, -1), 1
+            )  # weight by num of tokens.
+
+            # batch_loss: mean of per example loss.
+            return jnp.mean(example_loss)
+
+        loss_value, grads = jax.value_and_grad(loss_fn)(lora_params, params)
+        updates, opt_state = optimizer.update(grads, opt_state, lora_params)
+
+        lora_params = optax.apply_updates(lora_params, updates)
+        return lora_params, opt_state, loss_value
+
+    for epoch in range(config.N_EPOCHS):
+        progress.update(p_task_epoch, advance=1)
+        total_loss = jnp.zeros(())
+
+        for step in range(1, n_train_steps + 1):
+            # Make list of N training examples.
+            examples = [next(train_data_iter) for _ in range(config.BATCH_SIZE)]
+
+            # Convert list of examples into a dict of np.arrays and load onto devices.
+            batch = jax.tree.map(lambda *x: np.stack(x), *examples)
+            batch = big_vision.utils.reshard(batch, data_sharding)
+
+            # Training step and report training loss
+            lora_map, opt_state, loss = update_fn(lora_map, params, opt_state, batch)
+            loss = jax.device_get(loss)
+
+            if step % verbosity_freq == 0 and verbose:
+                progress.update(
+                    p_task_step,
+                    description=f"[green]Batches...\n total_loss: {total_loss}, loss: {loss}",
+                )
+            progress.update(p_task_step, advance=1)
+
+        progress.update(
+            p_task_epoch,
+            description=f"[red]Epochs...\n total_loss: {total_loss}, loss: {loss}",
+        )
+        # reset the inner loop progress bar
+        progress.reset(p_task_step)
+
+        # save lora params for this epoch
+        with open(
+            os.path.join(checkpoint_dir, f"{checkpoint_prefix}_epoch_{epoch}.pickle"),
+            "wb",
+        ) as f:
+            pickle.dump(lora_map, f)
+
+    progress.stop()
+    with open(
+        os.path.join(checkpoint_dir, f"{checkpoint_prefix}_final.pickle"), "wb"
+    ) as f:
+        pickle.dump(lora_map, f)
+
+
+def prepare_test_dataset():
+    """Roboflow number image dataset
+
+    Returns:
+        train_dataset: for training, tf_dataset
+        val_dataset: for validation
+    """
+    from dotenv import load_dotenv
+    from roboflow import Roboflow
+
+    load_dotenv()
+    ROBOFLOW_API_KEY = os.getenv("ROBOFLOW_API_KEY")
+    rf = Roboflow(api_key=ROBOFLOW_API_KEY)
+    project = rf.workspace("roboflow-jvuqo").project("number-ops-j1426")
+    version = project.version(1)
+    dataset = version.download("paligemma")
+
+    train_dataset = jsonl.DataSource(
+        os.path.join(dataset.location, "dataset/_annotations.train.jsonl"),
+        fopen_keys={"image": f"{dataset.location}/dataset"},
+    )
+
+    val_dataset = jsonl.DataSource(
+        os.path.join(dataset.location, "dataset/_annotations.valid.jsonl"),
+        fopen_keys={"image": f"{dataset.location}/dataset"},
+    )
+
+    # train_dataset = train_dataset.get_tfdata().shuffle(1_000).repeat()
+    # val_dataset = val_dataset.get_tfdata(ordered=True)
+
+    return train_dataset, val_dataset
 
 
 if __name__ == "__main__":
     config = PaliGemmaConfig()
-    train_lora(config, None, None)
+    train_ds, val_ds = prepare_test_dataset()
+
+    train_lora(config, "checkpoints", train_ds, val_ds)

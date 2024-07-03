@@ -1,11 +1,11 @@
-import json
 import os
 
 import big_vision.utils
-import jax
 import kagglehub
 import ml_collections
 from big_vision.models.proj.paligemma import paligemma
+
+import util
 
 
 def parameter_overview(params, file_name="parameters_paligemma.txt"):
@@ -13,16 +13,6 @@ def parameter_overview(params, file_name="parameters_paligemma.txt"):
         for path, arr in big_vision.utils.tree_flatten_with_names(params)[0]:
             f.write(f"{path} {str(arr.shape)} {arr.dtype}\n")
             # f.write(f"{path:80s} {str(arr.shape):22s} {arr.dtype}\n")
-
-
-def check_tree1(params):
-    # result = big_vision.utils.tree_flatten_with_names(params)
-
-    result = jax.tree.map(lambda x: x.shape, params)
-    print(result)
-    # breakpoint()
-    with open("params_structure.json", "wt") as f:
-        json.dump(result, f)
 
 
 def check_pretrained_model():
@@ -61,7 +51,7 @@ def check_pretrained_model():
 
     params = paligemma.load(None, MODEL_PATH, model_config)
     # parameter_overview(params)
-    check_tree1(params)
+    util.params_to_json(params)
 
 
 if __name__ == "__main__":
