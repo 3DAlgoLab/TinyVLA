@@ -1,1 +1,1 @@
-{"('llm', 'layers', 'attn', 'kv_einsum', 'w')": {"v_lora_A": [18, 1, 2048, 16], "v_lora_B": [18, 1, 16, 256]}, "('llm', 'layers', 'attn', 'q_einsum', 'w')": {"q_lora_A": [18, 8, 2048, 16], "q_lora_B": [18, 8, 16, 256]}}
+{"('llm', 'layers', 'attn', 'kv_einsum', 'w')": {"v_lora_A": [18, 1, 1, 2048, 16], "v_lora_B": [18, 1, 1, 16, 256]}, "('llm', 'layers', 'attn', 'q_einsum', 'w')": {"q_lora_A": [18, 8, 2048, 16], "q_lora_B": [18, 8, 16, 256]}}

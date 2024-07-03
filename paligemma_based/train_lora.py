@@ -46,11 +46,11 @@ gpu_device = jax.devices("gpu")[0]
 class PaliGemmaConfig:
     MODEL_PATH: str = "./pt_224_128.params.f16.npz"
     LORA_R: int = 16
-    LORA_ALPHA: int = 16
+    LORA_ALPHA: int = 32
     LORA_DROPOUT: float = 0.05
-    LR: float = 0.002
-    BATCH_SIZE: int = 8
-    N_ACCUMULATION_STEPS: int = 2
+    LR: float = 0.005
+    BATCH_SIZE: int = 16
+    N_ACCUMULATION_STEPS: int = 1
     MAX_SEQ_LEN: int = 128
     N_EPOCHS: int = 1
     SEED: int = 420
@@ -134,8 +134,9 @@ def merge_lora_params(params, lora_params: Dict):
         if "kv_einsum" in path:
             v_lora_A = lora_params[path]["v_lora_A"]
             v_lora_B = lora_params[path]["v_lora_B"]
+
             merged_V = v[:, 1:2] + jnp.einsum(
-                "lhmr,lhrk->lhmk", v_lora_A, v_lora_B
+                "ldhmr, ldhrk -> ldhmk", v_lora_A, v_lora_B
             )  # this gives us the same dimension as v[1]
 
             return jnp.concatenate([v[:, 0:1], merged_V], axis=1)
@@ -218,27 +219,44 @@ def postprocess_tokens(tokenizer, tokens):
     return tokenizer.decode(tokens)  # type: ignore
 
 
-def gen_data_iterator(tf_dataset, tokenizer, seq_length=128):
+def gen_data_iterator(tf_dataset, tokenizer, train=False, seq_length=128):
     dataset = tf_dataset
     for example in dataset.as_numpy_iterator():
         image = Image.open(io.BytesIO(example["image"]))  # type: ignore
         image = preprocess_image(image)
 
         # prefix = "caption en"  # Could also be a different prefix per example.
+
         prefix = example["prefix"].decode().lower()  # type: ignore
         suffix = example["suffix"].decode().lower()  # type: ignore
-        tokens, mask_ar, mask_loss, _ = preprocess_tokens(
-            tokenizer, prefix, suffix, seq_length
-        )
-        label, _, _, _ = preprocess_tokens(tokenizer, suffix, seqlen=seq_length)
 
-        yield {
-            "image": np.asarray(image),
-            "text": np.asarray(tokens),
-            "label": np.asarray(label),
-            "mask_ar": np.asarray(mask_ar),
-            "mask_loss": np.asarray(mask_loss),
-        }
+        if train:
+            tokens, mask_ar, mask_loss, _ = preprocess_tokens(
+                tokenizer, prefix, suffix, seq_length
+            )
+            label, _, _, _ = preprocess_tokens(tokenizer, suffix, seqlen=seq_length)
+
+            yield {
+                "image": np.asarray(image),
+                "text": np.asarray(tokens),
+                "label": np.asarray(label),
+                "mask_ar": np.asarray(mask_ar),
+                "mask_loss": np.asarray(mask_loss),
+            }
+
+        else:
+            tokens, mask_ar, _, mask_input = preprocess_tokens(
+                tokenizer, prefix, seqlen=seq_length
+            )
+            label, _, _, _ = preprocess_tokens(tokenizer, suffix, seqlen=seq_length)
+
+            yield {
+                "image": np.asarray(image),
+                "text": np.asarray(tokens),
+                "label": np.asarray(label),
+                "mask_ar": np.asarray(mask_ar),
+                "mask_input": np.asarray(mask_input),
+            }
 
 
 def train_lora(
@@ -303,14 +321,14 @@ def train_lora(
             )
         elif "kv_einsum" in path:
             # get the key
-            v0 = v[0]  # first layer
-            value_shape = (v.shape[0], *v0[1].shape)  # (n_layers, n_heads, d_m, d_v)
+            value_shape = v[0][1].shape
 
-            # (n_layers, n_heads, d_m, r) x  (n_layers, n_heads, r, d_v)
-            v_A_shape = (*value_shape[:-1], lora_r)
+            # (n_layers, 1, n_heads, d_m, r) x  (n_layers, 1, n_heads, r, d_v)
+            v_A_shape = (v.shape[0], 1, *value_shape[:-1], lora_r)
             v_B_shape = (
-                value_shape[0],  # n_layers
-                value_shape[1],  # n_heads
+                v.shape[0],
+                1,
+                value_shape[0],  # n_heads
                 lora_r,
                 value_shape[-1],  # d_v
             )
@@ -518,7 +536,7 @@ def train_lora(
     train_dataset = train_dataset.get_tfdata().shuffle(1_000).repeat()
     val_dataset = val_dataset.get_tfdata(ordered=True)
 
-    train_data_iter = gen_data_iterator(train_dataset, tokenizer)
+    train_data_iter = gen_data_iterator(train_dataset, tokenizer, train=True)
     val_data_iter = gen_data_iterator(val_dataset, tokenizer)
 
     n_steps = math.ceil(num_batches / config.N_ACCUMULATION_STEPS)
@@ -533,15 +551,13 @@ def train_lora(
     optimizer = optax.MultiSteps(optimizer, config.N_ACCUMULATION_STEPS)
     opt_state = optimizer.init(lora_map)
 
-    verbosity_freq = num_batches // 100
+    # verbosity_freq = num_batches // 100
+    verbosity_freq = 10
+    validation_freq = verbosity_freq * 10
     jax.clear_caches()
 
     # Training Loop
     n_train_steps = num_batches
-    progress = Progress()
-    p_task_epoch = progress.add_task("[red]Epochs...", total=config.N_EPOCHS)
-    p_task_step = progress.add_task("[green]Batches...", total=n_train_steps)
-    progress.start()
 
     @functools.partial(jax.jit, donate_argnums=(0,))
     def update_fn(lora_params, params, opt_state, batch):
@@ -584,10 +600,22 @@ def train_lora(
         lora_params = optax.apply_updates(lora_params, updates)
         return lora_params, opt_state, loss_value
 
-    for epoch in range(config.N_EPOCHS):
-        progress.update(p_task_epoch, advance=1)
-        total_loss = jnp.zeros(())
+    print(f"Model predictions before training...")
+    html_out = ""
+    for image, _, caption in make_predictions(
+        val_data_iter,
+        decode,
+        params,
+        tokenizer,
+        data_sharding=data_sharding,
+        num_examples=4,
+        batch_size=4,
+    ):
+        html_out += util.render_example(image, caption)
+    util.display(util.HTML(html_out))
 
+    print("Training started...!")
+    for epoch in range(1, config.N_EPOCHS + 1):
         for step in range(1, n_train_steps + 1):
             # Make list of N training examples.
             examples = [next(train_data_iter) for _ in range(config.BATCH_SIZE)]
@@ -601,18 +629,23 @@ def train_lora(
             loss = jax.device_get(loss)
 
             if step % verbosity_freq == 0 and verbose:
-                progress.update(
-                    p_task_step,
-                    description=f"[green]Batches...\n total_loss: {total_loss}, loss: {loss}",
-                )
-            progress.update(p_task_step, advance=1)
+                print(f"Epoch:{epoch:02} steps:{step:03} loss:{loss:.3f}")
 
-        progress.update(
-            p_task_epoch,
-            description=f"[red]Epochs...\n total_loss: {total_loss}, loss: {loss}",
-        )
-        # reset the inner loop progress bar
-        progress.reset(p_task_step)
+            if (step % validation_freq) == 0:
+                print(f"Model predictions at epoch:{epoch} step:{step}")
+                html_out = ""
+                params_merged = merge_lora_params(params, lora_map)
+                for image, _, caption in make_predictions(
+                    val_data_iter,
+                    decode,
+                    params_merged,
+                    tokenizer,
+                    data_sharding=data_sharding,
+                    num_examples=4,
+                    batch_size=4,
+                ):
+                    html_out += util.render_example(image, caption)
+                util.display(util.HTML(html_out))
 
         # save lora params for this epoch
         with open(
@@ -621,7 +654,6 @@ def train_lora(
         ) as f:
             pickle.dump(lora_map, f)
 
-    progress.stop()
     with open(
         os.path.join(checkpoint_dir, f"{checkpoint_prefix}_final.pickle"), "wb"
     ) as f:
@@ -661,8 +693,59 @@ def prepare_test_dataset():
     return train_dataset, val_dataset
 
 
+# Evaluation/inference loop.
+def make_predictions(
+    data_iterator,
+    decode,  # Sampler function from big-vision
+    params,  # merged params
+    tokenizer,
+    *,
+    data_sharding=None,
+    num_examples=None,
+    batch_size=4,
+    seqlen=128,
+    sampler="greedy",
+):
+    outputs = []
+    while True:
+        # Construct a list of examples in the batch.
+        examples = []
+        try:
+            for _ in range(batch_size):
+                examples.append(next(data_iterator))
+                examples[-1]["_mask"] = np.array(True)  # Indicates true example.
+        except StopIteration:
+            if len(examples) == 0:
+                return outputs
+
+        # Not enough examples to complete a batch. Pad by repeating last example.
+        while len(examples) % batch_size:
+            examples.append(dict(examples[-1]))
+            examples[-1]["_mask"] = np.array(False)  # Indicates padding example.
+
+        # Convert list of examples into a dict of np.arrays and load onto devices.
+        batch = jax.tree.map(lambda *x: np.stack(x), *examples)
+        batch = big_vision.utils.reshard(batch, data_sharding)
+
+        # Make model predictions
+        tokens = decode(
+            {"params": params}, batch=batch, max_decode_len=seqlen, sampler=sampler
+        )
+
+        # Fetch model predictions to device and detokenize.
+        tokens, mask = jax.device_get((tokens, batch["_mask"]))
+        tokens = tokens[mask]  # remove padding examples.
+        labels = [postprocess_tokens(tokenizer, e["label"]) for e in examples]
+        responses = [postprocess_tokens(tokenizer, t) for t in tokens]
+
+        # Append to html output.
+        for example, label, response in zip(examples, labels, responses):
+            outputs.append((example["image"], label, response))
+            if num_examples and len(outputs) >= num_examples:
+                return outputs
+
+
 if __name__ == "__main__":
     config = PaliGemmaConfig()
     train_ds, val_ds = prepare_test_dataset()
-
     train_lora(config, "checkpoints", train_ds, val_ds)
