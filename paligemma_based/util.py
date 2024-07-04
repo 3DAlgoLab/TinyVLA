@@ -2,6 +2,7 @@ import base64
 import html
 import io
 import json
+import os
 import pickle
 from typing import List
 
@@ -9,6 +10,7 @@ import cv2
 import jax
 import numpy as np
 import supervision as sv
+from big_vision.datasets import jsonl
 from IPython.core.display import HTML, display
 from PIL import Image
 from tqdm.notebook import tqdm
@@ -57,6 +59,7 @@ def render_inline(image, resize=(128, 128)):
 
 
 def render_example(image, caption, classes=[]):
+    assert len(classes) > 0
     image = ((image + 1) / 2 * 255).astype(np.uint8)  # [-1,1] -> [0, 255]
     h, w, _ = image.shape
     try:
@@ -108,6 +111,39 @@ def check_test_data(location):
     sv.plot_images_grid(images, (5, 5))
 
     return CLASSES
+
+
+def prepare_test_dataset():
+    """Roboflow number image dataset
+
+    Returns:
+        train_dataset: for training, tf_dataset
+        val_dataset: for validation
+    """
+    from dotenv import load_dotenv
+    from roboflow import Roboflow
+
+    load_dotenv()
+    ROBOFLOW_API_KEY = os.getenv("ROBOFLOW_API_KEY")
+    rf = Roboflow(api_key=ROBOFLOW_API_KEY)
+    project = rf.workspace("roboflow-jvuqo").project("number-ops-j1426")
+    version = project.version(1)
+    dataset = version.download("paligemma")
+
+    train_dataset = jsonl.DataSource(
+        os.path.join(dataset.location, "dataset/_annotations.train.jsonl"),
+        fopen_keys={"image": f"{dataset.location}/dataset"},
+    )
+
+    val_dataset = jsonl.DataSource(
+        os.path.join(dataset.location, "dataset/_annotations.valid.jsonl"),
+        fopen_keys={"image": f"{dataset.location}/dataset"},
+    )
+
+    # train_dataset = train_dataset.get_tfdata().shuffle(1_000).repeat()
+    # val_dataset = val_dataset.get_tfdata(ordered=True)
+
+    return train_dataset, val_dataset
 
 
 if __name__ == "__main__":

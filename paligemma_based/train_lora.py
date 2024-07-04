@@ -1,3 +1,4 @@
+# %%
 # Define the mesh
 import functools
 import io
@@ -18,7 +19,6 @@ import optax
 import sentencepiece
 import tensorflow as tf
 import tree
-from big_vision.datasets import jsonl
 from big_vision.models.proj.paligemma import paligemma
 from big_vision.trainers.proj.paligemma import predict_fns
 from jax.experimental import mesh_utils
@@ -26,9 +26,9 @@ from jax.sharding import Mesh, NamedSharding
 from jax.sharding import PartitionSpec as P
 from jax.sharding import PositionalSharding
 from PIL import Image
-from rich.progress import Progress
 
 import util
+from util import prepare_test_dataset
 
 # device setup
 tf.config.set_visible_devices([], "GPU")
@@ -42,19 +42,42 @@ cpu_device = jax.devices("cpu")[0]
 gpu_device = jax.devices("gpu")[0]
 
 
+NUM_DETECTION_CLASSES = [
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "div",
+    "eqv",
+    "minus",
+    "mult",
+    "plus",
+]
+
+
 @dataclass
 class PaliGemmaConfig:
     MODEL_PATH: str = "./pt_224_128.params.f16.npz"
+    #
     LORA_R: int = 16
-    LORA_ALPHA: int = 32
+    LORA_ALPHA: int = 16
     LORA_DROPOUT: float = 0.05
-    LR: float = 0.005
-    BATCH_SIZE: int = 16
-    N_ACCUMULATION_STEPS: int = 1
+    LR: float = 0.0001
+    #
+    BATCH_SIZE: int = 2
+    N_ACCUMULATION_STEPS: int = 4
     MAX_SEQ_LEN: int = 128
+    #
     N_EPOCHS: int = 1
     SEED: int = 420
     CACHE_SIZE: int = 30  # number of steps in the transformer's cache ?
+    #
     TOKENIZER_PATH: str = "./paligemma_tokenizer.model"
 
 
@@ -127,6 +150,7 @@ def load_model(ckpt_path: str):
     return model, params
 
 
+@jax.jit
 def merge_lora_params(params, lora_params: Dict):
     def merge_fn(path, v):
         # h - num heads, m - model dim, r - lora dim, k - key dim, v - value dim
@@ -538,6 +562,7 @@ def train_lora(
 
     train_data_iter = gen_data_iterator(train_dataset, tokenizer, train=True)
     val_data_iter = gen_data_iterator(val_dataset, tokenizer)
+    print("Train step size:", num_batches)
 
     n_steps = math.ceil(num_batches / config.N_ACCUMULATION_STEPS)
     schedule = optax.warmup_cosine_decay_schedule(
@@ -552,7 +577,7 @@ def train_lora(
     opt_state = optimizer.init(lora_map)
 
     # verbosity_freq = num_batches // 100
-    verbosity_freq = 10
+    verbosity_freq = 1
     validation_freq = verbosity_freq * 10
     jax.clear_caches()
 
@@ -611,7 +636,7 @@ def train_lora(
         num_examples=4,
         batch_size=4,
     ):
-        html_out += util.render_example(image, caption)
+        html_out += util.render_example(image, caption, NUM_DETECTION_CLASSES)
     util.display(util.HTML(html_out))
 
     print("Training started...!")
@@ -644,7 +669,9 @@ def train_lora(
                     num_examples=4,
                     batch_size=4,
                 ):
-                    html_out += util.render_example(image, caption)
+                    html_out += util.render_example(
+                        image, caption, classes=NUM_DETECTION_CLASSES
+                    )
                 util.display(util.HTML(html_out))
 
         # save lora params for this epoch
@@ -658,39 +685,6 @@ def train_lora(
         os.path.join(checkpoint_dir, f"{checkpoint_prefix}_final.pickle"), "wb"
     ) as f:
         pickle.dump(lora_map, f)
-
-
-def prepare_test_dataset():
-    """Roboflow number image dataset
-
-    Returns:
-        train_dataset: for training, tf_dataset
-        val_dataset: for validation
-    """
-    from dotenv import load_dotenv
-    from roboflow import Roboflow
-
-    load_dotenv()
-    ROBOFLOW_API_KEY = os.getenv("ROBOFLOW_API_KEY")
-    rf = Roboflow(api_key=ROBOFLOW_API_KEY)
-    project = rf.workspace("roboflow-jvuqo").project("number-ops-j1426")
-    version = project.version(1)
-    dataset = version.download("paligemma")
-
-    train_dataset = jsonl.DataSource(
-        os.path.join(dataset.location, "dataset/_annotations.train.jsonl"),
-        fopen_keys={"image": f"{dataset.location}/dataset"},
-    )
-
-    val_dataset = jsonl.DataSource(
-        os.path.join(dataset.location, "dataset/_annotations.valid.jsonl"),
-        fopen_keys={"image": f"{dataset.location}/dataset"},
-    )
-
-    # train_dataset = train_dataset.get_tfdata().shuffle(1_000).repeat()
-    # val_dataset = val_dataset.get_tfdata(ordered=True)
-
-    return train_dataset, val_dataset
 
 
 # Evaluation/inference loop.
@@ -745,7 +739,11 @@ def make_predictions(
                 return outputs
 
 
+# %%
 if __name__ == "__main__":
+
     config = PaliGemmaConfig()
     train_ds, val_ds = prepare_test_dataset()
-    train_lora(config, "checkpoints", train_ds, val_ds)
+    train_lora(config, "./checkpoints", train_ds, val_ds)
+
+# %%
