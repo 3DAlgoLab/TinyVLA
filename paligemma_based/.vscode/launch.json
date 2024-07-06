@@ -5,12 +5,29 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Python Debugger: paligemma.train",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "big_vision.trainers.proj.paligemma.train",
+      "args": [
+        "--config",
+        "bv_pali_cfg.py",
+        "--workdir",
+        "workdirs/"
+      ],
+      "env": {
+        "BV_GEMMA_DIR": "ckpts/",
+        "MODEL_NAME": "paligemma-3b-pt-224",
+        "CKPT_FILE": "paligemma-3b-pt-224.npz"
+      }
+    },
+    {
       "name": "Python Debugger: Current File",
       "type": "debugpy",
       "request": "launch",
       "program": "${file}",
       "console": "integratedTerminal",
       "justMyCode": false
-    }
+    },
   ]
 }
