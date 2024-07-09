@@ -1,4 +1,6 @@
 {
+  "peacock.remoteColor": "#bf5eb7",
+  "python.analysis.typeCheckingMode": "off",
   "workbench.colorCustomizations": {
     "activityBar.activeBackground": "#ce82c7",
     "activityBar.background": "#ce82c7",
@@ -17,7 +19,5 @@
     "titleBar.activeForeground": "#15202b",
     "titleBar.inactiveBackground": "#bf5eb799",
     "titleBar.inactiveForeground": "#15202b99"
-  },
-  "peacock.remoteColor": "#bf5eb7",
-  "python.analysis.typeCheckingMode": "off"
+  }
 }

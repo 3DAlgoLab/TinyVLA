@@ -1,3 +1,5 @@
+# source: https://huggingface.co/blog/paligemma
+
 # %%
 import torch
 from datasets import load_dataset

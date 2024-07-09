@@ -164,3 +164,6 @@ wandb/
 outputs/
 PokemonBLIPCaptions/
 /pokemon
+/test_trainer
+/tmp_trainer
+/pissa-llama-2-7b
