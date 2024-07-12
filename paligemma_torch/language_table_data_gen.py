@@ -70,15 +70,6 @@ def language_table_action_to_rt2_action_string(action):
     return " ".join(map(lambda v: f"<loc{v:04}>", action_ids))
 
 
-# ic(action_id_to_trans_val(128))
-# ic(action_id_to_trans_val(256))
-# ic(action_id_to_trans_val(0))
-
-# ic(trans_val_to_id(0))
-# ic(trans_val_to_id(0.030))
-# ic(trans_val_to_id(-0.030))
-
-
 # %%
 DATASET_PATH = "/data/language_table_sim"
 
