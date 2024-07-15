@@ -8,10 +8,8 @@ from pathlib import Path
 import numpy as np
 import sentencepiece as spm
 import tensorflow_datasets as tfds
-
-# from icecream import ic
+from icecream import ic
 from PIL import Image
-
 
 TOKENIZER_PATH = "./paligemma_tokenizer.model"
 
@@ -55,6 +53,15 @@ def action_id_to_trans_val(action_id):
     return (action_id - 128) * MAX_STEP_RANGE / 255 / 1000.0
 
 
+def test_trans_val_to_id():
+    val = action_id_to_trans_val(128)
+    ic(val)
+    assert trans_val_to_id(val) == 128
+    val = action_id_to_trans_val(220)
+    ic(val)
+    assert trans_val_to_id(val) == 220
+
+
 def language_table_action_to_rt2_action_string(action):
     """Only consider Terminate, X, Y,
     RT-2 Format: [Terminate, DX, DY, DZ, RX, RY, RZ, Grip]
@@ -70,6 +77,18 @@ def language_table_action_to_rt2_action_string(action):
     return " ".join(map(lambda v: f"<loc{v:04}>", action_ids))
 
 
+def language_table_action_to_xy_string(action):
+    """Only consider Terminate, X, Y,
+    No Spaces
+    """
+    # Assume zero action is terminate
+    is_terminated = np.allclose(action, np.zeros_like(action))
+    terminate_id = 255 if is_terminated else 0
+    action_id = trans_val_to_id(action)
+    action_ids = [terminate_id, action_id[0], action_id[1]]
+    return "".join(map(lambda v: f"<loc{v:04}>", action_ids))
+
+
 # %%
 DATASET_PATH = "/data/language_table_sim"
 
@@ -79,11 +98,18 @@ def decode_inst(inst):
     return bytes(inst[np.where(inst != 0)].tolist()).decode("utf-8")
 
 
+def check_dataset_size(dataset_path=DATASET_PATH):
+    builder = tfds.builder_from_directory(dataset_path)
+    episode_ds = builder.as_dataset(split="train")
+    ic(len(episode_ds))
+
+
 def generate_jsonl_data(
     episode_num=5,
     out_data_folder="./data/language_table_mini",
     dataset_path=DATASET_PATH,
     episode_skip=None,
+    action_to_string=language_table_action_to_rt2_action_string,
 ):
     builder = tfds.builder_from_directory(dataset_path)
     episode_ds = builder.as_dataset(split="train")
@@ -115,7 +141,7 @@ def generate_jsonl_data(
         ):
             image_file_name = f"frame_{i:08_}.png"
             frame_path = out_data_folder / image_file_name
-            action_str = language_table_action_to_rt2_action_string(action)
+            action_str = action_to_string(action)
 
             prefix_str = instruction_template.format(task=instruction)
             element = dict(prefix=prefix_str, image=image_file_name, suffix=action_str)
@@ -125,22 +151,21 @@ def generate_jsonl_data(
 
 # %%
 
-
 if __name__ == "__main__":
-    # download_tokenizer()
-    # check_action_tokens()
-    # instructions, frames, actions = generate_jsonl_data()
-    # sample_action1 = np.array([0.0, 0.0])
-    # str1 = language_table_action_to_rt2_action_string(sample_action1)
-    # print(str1)
 
-    # sample_action1 = np.array([0.04, 0.0])
-    # str2 = language_table_action_to_rt2_action_string(sample_action1)
-    # print(str2)
+    # Test
+    # test_trans_val_to_id()
+    check_dataset_size()
 
-    # sample_action1 = np.array([0.04, -0.04])
-    # str2 = language_table_action_to_rt2_action_string(sample_action1)
-    # print(str2)
-
-    generate_jsonl_data(100, "./data/language_table_mini_train")
-    generate_jsonl_data(5, "./data/language_table_mini_valid", episode_skip=100)
+    #
+    generate_jsonl_data(
+        2000,
+        "/data/language_table_mini_train2",
+        action_to_string=language_table_action_to_xy_string,
+    )
+    generate_jsonl_data(
+        5,
+        "/data/language_table_mini_valid2",
+        episode_skip=2000,
+        action_to_string=language_table_action_to_xy_string,
+    )

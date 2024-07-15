@@ -12,7 +12,7 @@ from transformers import AutoProcessor, PaliGemmaForConditionalGeneration
 
 # %%
 
-peft_model_id = "3dalgo/language_table_mini"
+peft_model_id = "3dalgo/language_table_mini2"
 base_model_id = "google/paligemma-3b-pt-224"
 
 
@@ -69,7 +69,7 @@ def render_example(instruction, image, caption):
 from datasets import Image as dsImage
 from datasets import load_dataset
 
-parent_folder = "/data/language_table_mini_train/"
+parent_folder = "/data/language_table_mini_train2/"
 valid_file = parent_folder + "_annotations.jsonl"
 
 
@@ -104,7 +104,7 @@ for i, item in enumerate(candidates):
 
     prompt = item["prefix"]
     inputs = processor(prompt, raw_image.convert("RGB"), return_tensors="pt").to("cuda")
-    output = model.generate(**inputs, max_new_tokens=20)
+    output = model.generate(**inputs, max_new_tokens=10)
     result = processor.decode(output[0], skip_special_tokens=True)[len(prompt) :]
     result = result.strip()
     outs.append(render_example(prompt, raw_image, result))

@@ -1,7 +1,7 @@
 # %% Review Dataset
 import torch
 from datasets import Image as dsImage
-from datasets import load_dataset
+from datasets import load_metric
 from peft import LoraConfig, get_peft_model
 from transformers import (
     BitsAndBytesConfig,
@@ -10,24 +10,22 @@ from transformers import (
     Trainer,
     TrainingArguments,
 )
-
+import numpy as np
 import common
 
+metric = load_metric("accuracy")
+def compute_metrics(eval_pred):
+    logits, labels = eval_pred
+    predictions = np.argmax(logits, axis=-1)
+    return metric.compute(predictions=predictions, references=labels)
+
 # %%
-parent_folder = "/data/language_table_mini_train/"
-train_file = parent_folder + "_annotations.jsonl"
+train_data_folder = "/data/language_table_mini_train2/"
+val_data_folder = "/data/language_table_mini_valid2/"
 
+train_ds = common.load_vla_data_from_folder(train_data_folder, split='train')
+val_ds = common.load_vla_data_from_folder(val_data_folder, split='valid')
 
-def add_abs_path(example):
-    example["image"] = parent_folder + example["image"]
-    return example
-
-
-ds_raw = load_dataset("json", data_files={"train": train_file})
-
-ds_raw = ds_raw.map(add_abs_path)
-ds_raw = ds_raw.cast_column("image", dsImage(mode="RGB"))
-train_ds = ds_raw["train"]
 
 # %%
 
@@ -55,7 +53,7 @@ def collate_fn(examples):
 # %%
 # Lora Configuration
 lora_config = LoraConfig(
-    r=8,
+    r=32,
     target_modules=[
         "q_proj",
         "o_proj",
@@ -84,12 +82,12 @@ model.print_trainable_parameters()
 run_name = common.generate_timestamp()
 
 args = TrainingArguments(
-    num_train_epochs=5,
+    num_train_epochs=10,
     remove_unused_columns=False,
     per_device_train_batch_size=4,
     gradient_accumulation_steps=4,
     warmup_steps=2,
-    learning_rate=2e-5,
+    learning_rate=2e-4,
     weight_decay=1e-6,
     adam_beta2=0.999,
     logging_steps=50,  # 100 -> 25
@@ -98,16 +96,21 @@ args = TrainingArguments(
     save_steps=500,  # 1_000 -> 500
     push_to_hub=True,
     save_total_limit=1,
-    output_dir="outputs/language_table_mini",
+    output_dir="outputs/language_table_mini2",
     bf16=True,
     report_to=["wandb"],  # tensorboard -> wandb
     dataloader_pin_memory=False,
-    run_name=run_name,  # added newly for wandb
+    metric_for_best_model="eval_loss",
+    run_name=run_name,  # added newly for wandb 
+    load_best_model_at_end=True
 )
 
 
 trainer = Trainer(
-    model=model, train_dataset=train_ds, data_collator=collate_fn, args=args
+    model=model, train_dataset=train_ds, 
+    eval_dataset=val_ds, 
+    data_collator=collate_fn, args=args, 
+    compute_metrics=compute_metrics
 )
 
 trainer.train()

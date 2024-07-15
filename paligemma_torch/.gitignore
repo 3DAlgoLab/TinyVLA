@@ -167,3 +167,7 @@ PokemonBLIPCaptions/
 /test_trainer
 /tmp_trainer
 /pissa-llama-2-7b
+/experiments/logs/
+/experiments/results/
+
+experiments/test_trainer
