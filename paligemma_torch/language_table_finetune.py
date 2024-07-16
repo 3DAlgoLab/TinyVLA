@@ -13,6 +13,10 @@ from transformers import (
 import numpy as np
 import common
 
+import os 
+
+
+
 metric = load_metric("accuracy")
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
@@ -21,13 +25,22 @@ def compute_metrics(eval_pred):
 
 # %%
 train_data_folder = "/data/language_table_mini_train2/"
-val_data_folder = "/data/language_table_mini_valid2/"
+train_ds = common.load_vla_data_from_folder(train_data_folder, split='train').shuffle(seed=1)
 
-train_ds = common.load_vla_data_from_folder(train_data_folder, split='train')
-val_ds = common.load_vla_data_from_folder(val_data_folder, split='valid')
+# val_data_folder = "/data/language_table_mini_valid2/"
+# val_ds = common.load_vla_data_from_folder(val_data_folder, split='valid')
 
 
 # %%
+for item in train_ds:
+    print(item)
+    item['image']
+    break
+
+item['image']
+
+
+#%%
 
 model_id = "google/paligemma-3b-pt-224"
 processor = PaliGemmaProcessor.from_pretrained(model_id)
@@ -53,7 +66,7 @@ def collate_fn(examples):
 # %%
 # Lora Configuration
 lora_config = LoraConfig(
-    r=32,
+    r=16,
     target_modules=[
         "q_proj",
         "o_proj",
@@ -81,36 +94,47 @@ model.print_trainable_parameters()
 # %%
 run_name = common.generate_timestamp()
 
+
+num_samples = 50_000
+batch_size= 8
+epochs = 10
+gradient_accumulation_steps = 4
+max_steps = (num_samples // batch_size) // gradient_accumulation_steps * epochs
+gpu_num = 2
+per_device_batch_size = batch_size//gpu_num
+
+print("Max Steps:", max_steps)
+
+#%%
+
 args = TrainingArguments(
-    num_train_epochs=10,
+    num_train_epochs=epochs,
     remove_unused_columns=False,
-    per_device_train_batch_size=4,
-    gradient_accumulation_steps=4,
+    per_device_train_batch_size=per_device_batch_size,
+    gradient_accumulation_steps=gradient_accumulation_steps,
     warmup_steps=2,
+    max_steps= max_steps,
     learning_rate=2e-4,
     weight_decay=1e-6,
     adam_beta2=0.999,
     logging_steps=50,  # 100 -> 25
     optim="adamw_hf",
     save_strategy="steps",
-    save_steps=500,  # 1_000 -> 500
+    save_steps=500,  # 1_000 -> 500    
     push_to_hub=True,
     save_total_limit=1,
-    output_dir="outputs/language_table_mini2",
+    output_dir="outputs/language_table_medium3",
     bf16=True,
-    report_to=["wandb"],  # tensorboard -> wandb
-    dataloader_pin_memory=False,
-    metric_for_best_model="eval_loss",
-    run_name=run_name,  # added newly for wandb 
-    load_best_model_at_end=True
+    report_to=["tensorboard"],  # tensorboard -> wandb    
+    run_name=run_name,  # added newly for wandb
+    dataloader_pin_memory=False, 
+    # load_best_model_at_end=True
 )
 
 
 trainer = Trainer(
-    model=model, train_dataset=train_ds, 
-    eval_dataset=val_ds, 
-    data_collator=collate_fn, args=args, 
-    compute_metrics=compute_metrics
+    model=model, train_dataset=train_ds,     
+    data_collator=collate_fn, args=args,     
 )
 
 trainer.train()
