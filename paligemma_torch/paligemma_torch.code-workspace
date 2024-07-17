@@ -8,6 +8,9 @@
 		},
 		{
 			"path": "../../ref/transformers"
+		},
+		{
+			"path": "../tinyllava_based"
 		}
 	],
 	"settings": {
