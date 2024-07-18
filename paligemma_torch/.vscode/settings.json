@@ -29,5 +29,7 @@
     "paligemma",
     "sentencepiece",
     "tfds"
-  ]
+  ],
+  "editor.formatOnSave": true,
+  "black-formatter.importStrategy": "fromEnvironment"
 }

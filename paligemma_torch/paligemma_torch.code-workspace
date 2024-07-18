@@ -1,38 +1,31 @@
 {
 	"folders": [
 		{
+			"name": "tinyllava_based",
+			"path": "../tinyllava_based"
+		},
+		{
+			"name": "TinyLLaVA_Factory",
+			"path": "../../vlms/TinyLLaVA_Factory"
+		},
+		{
+			"name": "paligemma_torch",
 			"path": "."
 		},
 		{
+			"name": "paligemma_based",
 			"path": "../paligemma_based"
 		},
 		{
+			"name": "transformers",
 			"path": "../../ref/transformers"
-		},
-		{
-			"path": "../tinyllava_based"
 		}
 	],
 	"settings": {
-		"peacock.remoteColor": "#1e7fa5",
-		"workbench.colorCustomizations": {
-			"activityBar.activeBackground": "#26a0d0",
-			"activityBar.background": "#26a0d0",
-			"activityBar.foreground": "#15202b",
-			"activityBar.inactiveForeground": "#15202b99",
-			"activityBarBadge.background": "#f5c9e9",
-			"activityBarBadge.foreground": "#15202b",
-			"commandCenter.border": "#e7e7e799",
-			"sash.hoverBorder": "#26a0d0",
-			"statusBar.background": "#1e7fa5",
-			"statusBar.foreground": "#e7e7e7",
-			"statusBarItem.hoverBackground": "#26a0d0",
-			"statusBarItem.remoteBackground": "#1e7fa5",
-			"statusBarItem.remoteForeground": "#e7e7e7",
-			"titleBar.activeBackground": "#1e7fa5",
-			"titleBar.activeForeground": "#e7e7e7",
-			"titleBar.inactiveBackground": "#1e7fa599",
-			"titleBar.inactiveForeground": "#e7e7e799"
-		}
+		"editor.formatOnSave": true,
+		"accessibility.signalOptions.volume": 3,
+		"editor.fontFamily": "Consolas, 'Courier New', monospace",
+		"editor.fontLigatures": true,
+		"debug.console.fontSize": 12
 	}
 }

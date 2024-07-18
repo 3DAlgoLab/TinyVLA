@@ -1,18 +1,18 @@
-import token
 from transformers import AutoTokenizer
 
-
-model_name = "bczhou/TinyLLaVA-3.1B"
+hf_path = "tinyllava/TinyLLaVA-Phi-2-SigLIP-3.1B"
+# model_name = "bczhou/TinyLLaVA-3.1B"
 # model_name = "bert-base-uncased"
-tokenizer = AutoTokenizer.from_pretrained(model_name)
+tokenizer = AutoTokenizer.from_pretrained(hf_path)
 
-for i in range(0, 10000):
+not_display_unique_token = True
+for i in range(0, 1_000):
     integer_text = f"{i}"
     tokens = tokenizer.tokenize(integer_text)
 
     if len(tokens) == 1:
-        print(f"The integer '{integer_text}' has unique tokens: {tokens[0]}")
+        if not not_display_unique_token:
+            print(f"The integer '{integer_text}' has unique tokens: {tokens[0]}")
     else:
         print(f"The integer '{integer_text}' does not have unique tokens.")
-        
-        
+        break
