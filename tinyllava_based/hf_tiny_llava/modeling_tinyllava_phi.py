@@ -20,12 +20,21 @@ from transformers.utils import logging
 from transformers import PreTrainedModel
 from transformers.modeling_outputs import CausalLMOutputWithPast
 from transformers.generation.utils import GenerateOutput
-from transformers import CLIPVisionModel, CLIPImageProcessor, SiglipVisionModel, SiglipImageProcessor
+from transformers import (
+    CLIPVisionModel,
+    CLIPImageProcessor,
+    SiglipVisionModel,
+    SiglipImageProcessor,
+)
 
-from .configuration import TinyLlavaConfig, IGNORE_INDEX, IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN
+from .configuration import (
+    TinyLlavaConfig,
+    IGNORE_INDEX,
+    IMAGE_TOKEN_INDEX,
+    DEFAULT_IMAGE_TOKEN,
+)
 
 from transformers import AutoConfig, AutoModelForCausalLM, PhiForCausalLM
-
 
 
 logger = logging.get_logger(__name__)
@@ -46,6 +55,7 @@ LOGDIR = "."
 
 class SeparatorStyle(Enum):
     """Different separator style."""
+
     SINGLE = auto()
     TWO = auto()
     MPT = auto()
@@ -58,6 +68,7 @@ class SeparatorStyle(Enum):
 @dataclasses.dataclass
 class Conversation:
     """A class that keeps all conversation history."""
+
     system: str
     roles: List[str]
     messages: List[List[str]]
@@ -75,7 +86,7 @@ class Conversation:
             messages = self.messages.copy()
             init_role, init_msg = messages[0].copy()
             init_msg = init_msg[0].replace("<image>", "").strip()
-            if 'mmtag' in self.version:
+            if "mmtag" in self.version:
                 messages[0] = (init_role, init_msg)
                 messages.insert(0, (self.roles[0], "<Image><image></Image>"))
                 messages.insert(1, (self.roles[1], "Received."))
@@ -109,14 +120,13 @@ class Conversation:
             sep_style=self.sep_style,
             sep=self.sep,
             sep2=self.sep2,
-            version=self.version)
-
-
+            version=self.version,
+        )
 
 
 conv_phi_v0 = Conversation(
     system="A chat between a curious user and an artificial intelligence assistant. "
-           "The assistant gives helpful, detailed, and polite answers to the user's questions.",
+    "The assistant gives helpful, detailed, and polite answers to the user's questions.",
     roles=("USER", "ASSISTANT"),
     version="phi",
     messages=(),
@@ -148,27 +158,37 @@ def expand2square(pil_img, background_color):
 def process_images(images, image_processor, model_cfg):
     image_aspect_ratio = getattr(model_cfg, "image_aspect_ratio", None)
     new_images = []
-    if image_aspect_ratio == 'pad':
+    if image_aspect_ratio == "pad":
         for image in images:
-            image = expand2square(image, tuple(int(x*255) for x in image_processor.image_mean))
-            image = image_processor.preprocess(image, return_tensors='pt')['pixel_values'][0]
+            image = expand2square(
+                image, tuple(int(x * 255) for x in image_processor.image_mean)
+            )
+            image = image_processor.preprocess(image, return_tensors="pt")[
+                "pixel_values"
+            ][0]
             new_images.append(image)
     else:
-        return image_processor(images, return_tensors='pt')['pixel_values']
+        return image_processor(images, return_tensors="pt")["pixel_values"]
     if all(x.shape == new_images[0].shape for x in new_images):
         new_images = torch.stack(new_images, dim=0)
     return new_images
 
 
-def tokenizer_image_token(prompt, tokenizer, image_token_index=IMAGE_TOKEN_INDEX, return_tensors=None):
-    prompt_chunks = [tokenizer(chunk).input_ids for chunk in prompt.split('<image>')]
+def tokenizer_image_token(
+    prompt, tokenizer, image_token_index=IMAGE_TOKEN_INDEX, return_tensors=None
+):
+    prompt_chunks = [tokenizer(chunk).input_ids for chunk in prompt.split("<image>")]
 
     def insert_separator(X, sep):
-        return [ele for sublist in zip(X, [sep]*len(X)) for ele in sublist][:-1]
+        return [ele for sublist in zip(X, [sep] * len(X)) for ele in sublist][:-1]
 
     input_ids = []
     offset = 0
-    if len(prompt_chunks) > 0 and len(prompt_chunks[0]) > 0 and prompt_chunks[0][0] == tokenizer.bos_token_id:
+    if (
+        len(prompt_chunks) > 0
+        and len(prompt_chunks[0]) > 0
+        and prompt_chunks[0][0] == tokenizer.bos_token_id
+    ):
         offset = 1
         input_ids.append(prompt_chunks[0][0])
 
@@ -176,10 +196,11 @@ def tokenizer_image_token(prompt, tokenizer, image_token_index=IMAGE_TOKEN_INDEX
         input_ids.extend(x[offset:])
 
     if return_tensors is not None:
-        if return_tensors == 'pt':
+        if return_tensors == "pt":
             return torch.tensor(input_ids, dtype=torch.long)
-        raise ValueError(f'Unsupported tensor type: {return_tensors}')
+        raise ValueError(f"Unsupported tensor type: {return_tensors}")
     return input_ids
+
 
 def load_image(image_file):
     if image_file.startswith("http") or image_file.startswith("https"):
@@ -189,66 +210,75 @@ def load_image(image_file):
         image = Image.open(image_file).convert("RGB")
     return image
 
-ACT_TYPE = {
-    'relu': nn.ReLU,
-    'gelu': nn.GELU
-}
+
+ACT_TYPE = {"relu": nn.ReLU, "gelu": nn.GELU}
+
 
 class Connector(nn.Module):
     def __init__(self, config=None):
         super().__init__()
-        mlp_gelu_match = re.match(r'^mlp(\d+)x_gelu$', config.connector_type)
-        act_type = config.connector_type.split('_')[-1]
+        mlp_gelu_match = re.match(r"^mlp(\d+)x_gelu$", config.connector_type)
+        act_type = config.connector_type.split("_")[-1]
         mlp_depth = int(mlp_gelu_match.group(1))
         modules = [nn.Linear(config.vision_hidden_size, config.hidden_size)]
         for _ in range(1, mlp_depth):
             modules.append(ACT_TYPE[act_type]())
             modules.append(nn.Linear(config.hidden_size, config.hidden_size))
-            
+
         self._connector = nn.Sequential(*modules)
-    
+
     def forward(self, x):
         return self._connector(x)
 
+
 class VisionTower(nn.Module):
-    def __init__(self, cfg, model_name_or_path = 'clip'):
+    def __init__(self, cfg, model_name_or_path="clip"):
         super().__init__()
-        if 'clip' in model_name_or_path:
+        if "clip" in model_name_or_path:
             self._vision_tower = CLIPVisionModel(cfg)
-            self._image_processor = CLIPImageProcessor.from_pretrained(cfg.model_name_or_path)
+            self._image_processor = CLIPImageProcessor.from_pretrained(
+                cfg.model_name_or_path
+            )
         else:
             self._vision_tower = SiglipVisionModel(cfg)
-            self._image_processor = SiglipImageProcessor.from_pretrained(cfg.model_name_or_path)
-            
+            self._image_processor = SiglipImageProcessor.from_pretrained(
+                cfg.model_name_or_path
+            )
+
         self.config = cfg
-        
+
     def forward(self, x, **kwargs):
         image_features = self._vision_tower(x, output_hidden_states=True)
-        image_features = image_features.hidden_states[kwargs.get('vision_feature_layer', -2)]
+        image_features = image_features.hidden_states[
+            kwargs.get("vision_feature_layer", -2)
+        ]
 
-        if kwargs.get('vision_feature_select_strategy', 'patch') == 'patch':
+        if kwargs.get("vision_feature_select_strategy", "patch") == "patch":
             image_features = image_features[:, 1:]
-        elif kwargs.get('vision_feature_select_strategy', 'patch') == 'cls_patch':
+        elif kwargs.get("vision_feature_select_strategy", "patch") == "cls_patch":
             image_features = image_features
         else:
-            raise ValueError(f"Unexpected select feature: {kwargs.get('vision_feature_select_strategy')}")
+            raise ValueError(
+                f"Unexpected select feature: {kwargs.get('vision_feature_select_strategy')}"
+            )
 
         return image_features
-        
+
     @property
     def vision_tower(self):
         return self._vision_tower
-        
+
     @vision_tower.setter
     def vision_tower(self, vision_tower):
         self._vision_tower = vision_tower
+
 
 def get_value_from_kwargs(kwargs, name):
     if name in kwargs:
         return kwargs.pop(name)
     else:
         return None
-    
+
 
 class TinyLlavaPreTrainedModel(PreTrainedModel):
     config_class = TinyLlavaConfig
@@ -284,15 +314,16 @@ class TinyLlavaPreTrainedModel(PreTrainedModel):
 
 class TinyLlavaForConditionalGeneration(TinyLlavaPreTrainedModel):
     def __init__(self, config: TinyLlavaConfig):
-        
+
         super().__init__(config)
 
         self.language_model = PhiForCausalLM(config.text_config)
-        self.vision_tower = VisionTower(config.vision_config, config.vision_model_name_or_path)
+        self.vision_tower = VisionTower(
+            config.vision_config, config.vision_model_name_or_path
+        )
         self.connector = Connector(config)
         self.post_init()
 
-    
     def get_input_embeddings(self):
         return self.language_model.get_input_embeddings()
 
@@ -314,15 +345,18 @@ class TinyLlavaForConditionalGeneration(TinyLlavaPreTrainedModel):
     def tie_weights(self):
         return self.language_model.tie_weights()
 
-    def resize_token_embeddings(self, new_num_tokens: Optional[int] = None, pad_to_multiple_of=None) -> nn.Embedding:
-        model_embeds = self.language_model.resize_token_embeddings(new_num_tokens, pad_to_multiple_of)
+    def resize_token_embeddings(
+        self, new_num_tokens: Optional[int] = None, pad_to_multiple_of=None
+    ) -> nn.Embedding:
+        model_embeds = self.language_model.resize_token_embeddings(
+            new_num_tokens, pad_to_multiple_of
+        )
         # update vocab size
         self.config.text_config.vocab_size = model_embeds.num_embeddings
         self.config.vocab_size = model_embeds.num_embeddings
         self.vocab_size = model_embeds.num_embeddings
         return model_embeds
 
-    
     def forward(
         self,
         input_ids: torch.LongTensor = None,
@@ -346,7 +380,7 @@ class TinyLlavaForConditionalGeneration(TinyLlavaPreTrainedModel):
                 attention_mask,
                 past_key_values,
                 inputs_embeds,
-                labels
+                labels,
             ) = self.prepare_inputs_labels_for_multimodal(
                 input_ids,
                 position_ids,
@@ -354,7 +388,7 @@ class TinyLlavaForConditionalGeneration(TinyLlavaPreTrainedModel):
                 past_key_values,
                 labels,
                 images,
-                image_sizes
+                image_sizes,
             )
         return self.language_model.forward(
             input_ids=input_ids,
@@ -366,9 +400,9 @@ class TinyLlavaForConditionalGeneration(TinyLlavaPreTrainedModel):
             use_cache=use_cache,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
-            return_dict=return_dict
+            return_dict=return_dict,
         )
-    
+
     @torch.no_grad()
     def generate(
         self,
@@ -383,21 +417,16 @@ class TinyLlavaForConditionalGeneration(TinyLlavaPreTrainedModel):
             raise NotImplementedError("`inputs_embeds` is not supported")
 
         if images is not None:
-            (
-                inputs,
-                position_ids,
-                attention_mask,
-                _,
-                inputs_embeds,
-                _
-            ) = self.prepare_inputs_labels_for_multimodal(
-                inputs,
-                position_ids,
-                attention_mask,
-                None,
-                None,
-                images,
-                image_sizes=image_sizes
+            (inputs, position_ids, attention_mask, _, inputs_embeds, _) = (
+                self.prepare_inputs_labels_for_multimodal(
+                    inputs,
+                    position_ids,
+                    attention_mask,
+                    None,
+                    None,
+                    images,
+                    image_sizes=image_sizes,
+                )
             )
         else:
             inputs_embeds = self.language_model.get_input_embeddings()(inputs)
@@ -406,46 +435,62 @@ class TinyLlavaForConditionalGeneration(TinyLlavaPreTrainedModel):
             position_ids=position_ids,
             attention_mask=attention_mask,
             inputs_embeds=inputs_embeds,
-            **kwargs
+            **kwargs,
         )
-        
+
     def encode_images(self, images):
         kwargs = {}
-        kwargs['vision_feature_layer'] = self.config.vision_feature_layer
-        kwargs['vision_feature_select_strategy'] = self.config.vision_feature_select_strategy
+        kwargs["vision_feature_layer"] = self.config.vision_feature_layer
+        kwargs["vision_feature_select_strategy"] = (
+            self.config.vision_feature_select_strategy
+        )
         images = images.to(device=self.device, dtype=self.dtype)
         image_features = self.vision_tower(images, **kwargs)
         image_features = self.connector(image_features)
         return image_features
-    
-    
-    
-    def prepare_inputs_for_generation(self, input_ids, past_key_values=None,
-                                      inputs_embeds=None, **kwargs):
+
+    def prepare_inputs_for_generation(
+        self, input_ids, past_key_values=None, inputs_embeds=None, **kwargs
+    ):
         images = kwargs.pop("images", None)
         image_sizes = kwargs.pop("image_sizes", None)
         inputs = self.language_model.prepare_inputs_for_generation(
-            input_ids, past_key_values=past_key_values, inputs_embeds=inputs_embeds, **kwargs
+            input_ids,
+            past_key_values=past_key_values,
+            inputs_embeds=inputs_embeds,
+            **kwargs,
         )
         if images is not None:
-            inputs['images'] = images
+            inputs["images"] = images
         if image_sizes is not None:
-            inputs['image_sizes'] = image_sizes
+            inputs["image_sizes"] = image_sizes
         return inputs
-        
+
     def prepare_inputs_labels_for_multimodal(
-        self, input_ids, position_ids, attention_mask, past_key_values, labels,
-        images, image_sizes=None
+        self,
+        input_ids,
+        position_ids,
+        attention_mask,
+        past_key_values,
+        labels,
+        images,
+        image_sizes=None,
     ):
         vision_tower = self.vision_tower
         if vision_tower is None or images is None or input_ids.shape[1] == 1:
-            return input_ids, position_ids, attention_mask, past_key_values, None, labels
+            return (
+                input_ids,
+                position_ids,
+                attention_mask,
+                past_key_values,
+                None,
+                labels,
+            )
 
-        
         image_features = self.encode_images(images)
 
         # TODO: image start / end is not implemented here to support pretraining.
-        if getattr(self.config, 'tune_mm_mlp_adapter', False):
+        if getattr(self.config, "tune_mm_mlp_adapter", False):
             raise NotImplementedError
 
         # Let's just add dummy tensors if they do not exist,
@@ -460,14 +505,22 @@ class TinyLlavaForConditionalGeneration(TinyLlavaPreTrainedModel):
         else:
             attention_mask = attention_mask.bool()
         if position_ids is None:
-            position_ids = torch.arange(0, input_ids.shape[1], dtype=torch.long, device=input_ids.device)
+            position_ids = torch.arange(
+                0, input_ids.shape[1], dtype=torch.long, device=input_ids.device
+            )
         if labels is None:
             labels = torch.full_like(input_ids, IGNORE_INDEX)
 
         # remove the padding using attention_mask -- FIXME
         _input_ids = input_ids
-        input_ids = [cur_input_ids[cur_attention_mask] for cur_input_ids, cur_attention_mask in zip(input_ids, attention_mask)]
-        labels = [cur_labels[cur_attention_mask] for cur_labels, cur_attention_mask in zip(labels, attention_mask)]
+        input_ids = [
+            cur_input_ids[cur_attention_mask]
+            for cur_input_ids, cur_attention_mask in zip(input_ids, attention_mask)
+        ]
+        labels = [
+            cur_labels[cur_attention_mask]
+            for cur_labels, cur_attention_mask in zip(labels, attention_mask)
+        ]
 
         new_input_embeds = []
         new_labels = []
@@ -476,22 +529,38 @@ class TinyLlavaForConditionalGeneration(TinyLlavaPreTrainedModel):
             num_images = (cur_input_ids == IMAGE_TOKEN_INDEX).sum()
             if num_images == 0:
                 cur_image_features = image_features[cur_image_idx]
-                cur_input_embeds_1 = self.language_model.get_input_embeddings()(cur_input_ids)
-                cur_input_embeds = torch.cat([cur_input_embeds_1, cur_image_features[0:0]], dim=0)
+                cur_input_embeds_1 = self.language_model.get_input_embeddings()(
+                    cur_input_ids
+                )
+                cur_input_embeds = torch.cat(
+                    [cur_input_embeds_1, cur_image_features[0:0]], dim=0
+                )
                 new_input_embeds.append(cur_input_embeds)
                 new_labels.append(labels[batch_idx])
                 cur_image_idx += 1
                 continue
 
-            image_token_indices = [-1] + torch.where(cur_input_ids == IMAGE_TOKEN_INDEX)[0].tolist() + [cur_input_ids.shape[0]]
+            image_token_indices = (
+                [-1]
+                + torch.where(cur_input_ids == IMAGE_TOKEN_INDEX)[0].tolist()
+                + [cur_input_ids.shape[0]]
+            )
             cur_input_ids_noim = []
             cur_labels = labels[batch_idx]
             cur_labels_noim = []
             for i in range(len(image_token_indices) - 1):
-                cur_input_ids_noim.append(cur_input_ids[image_token_indices[i]+1:image_token_indices[i+1]])
-                cur_labels_noim.append(cur_labels[image_token_indices[i]+1:image_token_indices[i+1]])
+                cur_input_ids_noim.append(
+                    cur_input_ids[
+                        image_token_indices[i] + 1 : image_token_indices[i + 1]
+                    ]
+                )
+                cur_labels_noim.append(
+                    cur_labels[image_token_indices[i] + 1 : image_token_indices[i + 1]]
+                )
             split_sizes = [x.shape[0] for x in cur_labels_noim]
-            cur_input_embeds = self.language_model.get_input_embeddings()(torch.cat(cur_input_ids_noim))
+            cur_input_embeds = self.language_model.get_input_embeddings()(
+                torch.cat(cur_input_ids_noim)
+            )
             cur_input_embeds_no_im = torch.split(cur_input_embeds, split_sizes, dim=0)
             cur_new_input_embeds = []
             cur_new_labels = []
@@ -503,7 +572,14 @@ class TinyLlavaForConditionalGeneration(TinyLlavaPreTrainedModel):
                     cur_image_features = image_features[cur_image_idx]
                     cur_image_idx += 1
                     cur_new_input_embeds.append(cur_image_features)
-                    cur_new_labels.append(torch.full((cur_image_features.shape[0],), IGNORE_INDEX, device=cur_labels.device, dtype=cur_labels.dtype))
+                    cur_new_labels.append(
+                        torch.full(
+                            (cur_image_features.shape[0],),
+                            IGNORE_INDEX,
+                            device=cur_labels.device,
+                            dtype=cur_labels.dtype,
+                        )
+                    )
 
             cur_new_input_embeds = [x.to(self.device) for x in cur_new_input_embeds]
 
@@ -514,9 +590,13 @@ class TinyLlavaForConditionalGeneration(TinyLlavaPreTrainedModel):
             new_labels.append(cur_new_labels)
 
         # Truncate sequences to max length as image embeddings can make the sequence longer
-        tokenizer_model_max_length = getattr(self.config, 'tokenizer_model_max_length', None)
+        tokenizer_model_max_length = getattr(
+            self.config, "tokenizer_model_max_length", None
+        )
         if tokenizer_model_max_length is not None:
-            new_input_embeds = [x[:tokenizer_model_max_length] for x in new_input_embeds]
+            new_input_embeds = [
+                x[:tokenizer_model_max_length] for x in new_input_embeds
+            ]
             new_labels = [x[:tokenizer_model_max_length] for x in new_labels]
 
         # Combine them
@@ -524,30 +604,65 @@ class TinyLlavaForConditionalGeneration(TinyLlavaPreTrainedModel):
         batch_size = len(new_input_embeds)
 
         new_input_embeds_padded = []
-        new_labels_padded = torch.full((batch_size, max_len), IGNORE_INDEX, dtype=new_labels[0].dtype, device=new_labels[0].device)
-        attention_mask = torch.zeros((batch_size, max_len), dtype=attention_mask.dtype, device=attention_mask.device)
-        position_ids = torch.zeros((batch_size, max_len), dtype=position_ids.dtype, device=position_ids.device)
+        new_labels_padded = torch.full(
+            (batch_size, max_len),
+            IGNORE_INDEX,
+            dtype=new_labels[0].dtype,
+            device=new_labels[0].device,
+        )
+        attention_mask = torch.zeros(
+            (batch_size, max_len),
+            dtype=attention_mask.dtype,
+            device=attention_mask.device,
+        )
+        position_ids = torch.zeros(
+            (batch_size, max_len), dtype=position_ids.dtype, device=position_ids.device
+        )
 
-        for i, (cur_new_embed, cur_new_labels) in enumerate(zip(new_input_embeds, new_labels)):
+        for i, (cur_new_embed, cur_new_labels) in enumerate(
+            zip(new_input_embeds, new_labels)
+        ):
             cur_len = cur_new_embed.shape[0]
-            if getattr(self.config, 'tokenizer_padding_side', 'right') == "left":
-                new_input_embeds_padded.append(torch.cat((
-                    torch.zeros((max_len - cur_len, cur_new_embed.shape[1]), dtype=cur_new_embed.dtype, device=cur_new_embed.device),
-                    cur_new_embed
-                ), dim=0))
+            if getattr(self.config, "tokenizer_padding_side", "right") == "left":
+                new_input_embeds_padded.append(
+                    torch.cat(
+                        (
+                            torch.zeros(
+                                (max_len - cur_len, cur_new_embed.shape[1]),
+                                dtype=cur_new_embed.dtype,
+                                device=cur_new_embed.device,
+                            ),
+                            cur_new_embed,
+                        ),
+                        dim=0,
+                    )
+                )
                 if cur_len > 0:
                     new_labels_padded[i, -cur_len:] = cur_new_labels
                     attention_mask[i, -cur_len:] = True
-                    position_ids[i, -cur_len:] = torch.arange(0, cur_len, dtype=position_ids.dtype, device=position_ids.device)
+                    position_ids[i, -cur_len:] = torch.arange(
+                        0, cur_len, dtype=position_ids.dtype, device=position_ids.device
+                    )
             else:
-                new_input_embeds_padded.append(torch.cat((
-                    cur_new_embed,
-                    torch.zeros((max_len - cur_len, cur_new_embed.shape[1]), dtype=cur_new_embed.dtype, device=cur_new_embed.device)
-                ), dim=0))
+                new_input_embeds_padded.append(
+                    torch.cat(
+                        (
+                            cur_new_embed,
+                            torch.zeros(
+                                (max_len - cur_len, cur_new_embed.shape[1]),
+                                dtype=cur_new_embed.dtype,
+                                device=cur_new_embed.device,
+                            ),
+                        ),
+                        dim=0,
+                    )
+                )
                 if cur_len > 0:
                     new_labels_padded[i, :cur_len] = cur_new_labels
                     attention_mask[i, :cur_len] = True
-                    position_ids[i, :cur_len] = torch.arange(0, cur_len, dtype=position_ids.dtype, device=position_ids.device)
+                    position_ids[i, :cur_len] = torch.arange(
+                        0, cur_len, dtype=position_ids.dtype, device=position_ids.device
+                    )
 
         new_input_embeds = torch.stack(new_input_embeds_padded, dim=0)
 
@@ -564,33 +679,45 @@ class TinyLlavaForConditionalGeneration(TinyLlavaPreTrainedModel):
         if _position_ids is None:
             position_ids = None
 
-        return None, position_ids, attention_mask, past_key_values, new_input_embeds, new_labels
-    
+        return (
+            None,
+            position_ids,
+            attention_mask,
+            past_key_values,
+            new_input_embeds,
+            new_labels,
+        )
+
     def chat(
         self,
         prompt: str,
-        tokenizer = None,
+        tokenizer=None,
         image: str = None,
         max_new_tokens: int = 512,
-        num_beams = 1,
+        num_beams=1,
         top_p=None,
-        temperature=0
+        temperature=0.1,
     ):
         image_processor = self.vision_tower._image_processor
 
         if image is not None:
-            prompt = DEFAULT_IMAGE_TOKEN + '\n' + prompt 
+            prompt = DEFAULT_IMAGE_TOKEN + "\n" + prompt
         conv = conv_phi_v0.copy()
         conv.append_message(conv.roles[0], prompt)
         conv.append_message(conv.roles[1], None)
         prompt = conv.get_prompt()
         if image is not None:
             image = load_image(image)
-            image_tensor = process_images(image, image_processor, self.config).to(self.device)
+            image_tensor = process_images(image, image_processor, self.config).to(
+                self.device
+            )
 
         input_ids = (
-            tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt")
-            .unsqueeze(0).to(self.device)
+            tokenizer_image_token(
+                prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors="pt"
+            )
+            .unsqueeze(0)
+            .to(self.device)
         )
         # Generate
         stime = time.time()
@@ -611,14 +738,12 @@ class TinyLlavaForConditionalGeneration(TinyLlavaPreTrainedModel):
 
         # print('inference over')
         generation_time = time.time() - stime
-        outputs = tokenizer.batch_decode(
-            output_ids, skip_special_tokens=True
-        )[0]
+        outputs = tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0]
 
         outputs = outputs.strip()
 
         return outputs, generation_time
-    
 
-AutoConfig.register("tinyllava", TinyLlavaConfig)        
+
+AutoConfig.register("tinyllava", TinyLlavaConfig)
 AutoModelForCausalLM.register(TinyLlavaConfig, TinyLlavaForConditionalGeneration)

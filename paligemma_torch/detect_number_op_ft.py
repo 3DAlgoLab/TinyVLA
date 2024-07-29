@@ -126,6 +126,6 @@ trainer = Trainer(
 trainer.train()
 
 # %%
-# register model card 
+# register model card
 trainer.push_to_hub()
 # %%

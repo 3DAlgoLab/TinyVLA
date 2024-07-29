@@ -28,7 +28,9 @@ tokenizer = AutoTokenizer.from_pretrained(
 prompt = "What are these?"
 image_url = "http://images.cocodataset.org/test-stuff2017/000000000001.jpg"
 output_text, generation_time = model.chat(
-    prompt=prompt, image=image_url, tokenizer=tokenizer
+    prompt=prompt,
+    image=image_url,
+    tokenizer=tokenizer,
 )
 
 print("model output:", output_text)
