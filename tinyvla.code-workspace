@@ -1,0 +1,29 @@
+{
+	"folders": [
+		{
+			"name": "tinyllava_based2",
+			"path": "tinyllava_based2"
+		},
+		{
+			"name": "tinyllava_based",
+			"path": "tinyllava_based"
+		},
+		{
+			"name": "paligemma_torch",
+			"path": "paligemma_torch"
+		},
+		{
+			"name": "paligemma_based",
+			"path": "paligemma_based"
+		},
+		{
+			"name": "transformers",
+			"path": "../ref/transformers"
+		},
+		{
+			"name": "TinyLLaVA_Factory",
+			"path": "../vlms/TinyLLaVA_Factory"
+		}
+	],
+	"settings": {}
+}
