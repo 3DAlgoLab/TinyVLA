@@ -1,11 +1,13 @@
 from transformers import AutoTokenizer
 
-hf_path = "tinyllava/TinyLLaVA-Phi-2-SigLIP-3.1B"
+# hf_path = "tinyllava/TinyLLaVA-Phi-2-SigLIP-3.1B"
+hf_path = "microsoft/phi-2"
 # model_name = "bczhou/TinyLLaVA-3.1B"
 # model_name = "bert-base-uncased"
 tokenizer = AutoTokenizer.from_pretrained(hf_path)
 
-not_display_unique_token = True
+print("--- Model or path name:", hf_path)
+not_display_unique_token = False
 for i in range(0, 1_000):
     integer_text = f"{i}"
     tokens = tokenizer.tokenize(integer_text)
@@ -15,4 +17,5 @@ for i in range(0, 1_000):
             print(f"The integer '{integer_text}' has unique tokens: {tokens[0]}")
     else:
         print(f"The integer '{integer_text}' does not have unique tokens.")
+        print("Bye bye...")
         break

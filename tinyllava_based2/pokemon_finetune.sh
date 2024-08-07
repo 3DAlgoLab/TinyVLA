@@ -1,10 +1,10 @@
-DATA_PATH="/home/ai/data/llava/dataset/text_files/llava_v1_5_mix665k.json"
-IMAGE_PATH="/home/ai/data/llava/dataset"
+DATA_PATH="/data/pokemon/pokemon_blip_captions.json"
+IMAGE_PATH="/data/pokemon/image"
 MODEL_MAX_LENGTH=3072
-OUTPUT_DIR="/mnt/data/sata/yinghu/checkpoints/llava_factory/custom-finetune-TinyLLaVA-Phi-2-SigLIP-3.1B-lora"
+OUTPUT_DIR="./outputs/pokemon-finetune-TinyLLaVA-Phi-2-SigLIP-3.1B-lora"
 
-deepspeed --include localhost:0,1,2,3 --master_port 29501 tinyllava/train/custom_finetune.py \
-    --deepspeed ./scripts/zero2.json \
+deepspeed --include localhost:0,1 --master_port 29501 custom_finetune.py \
+    --deepspeed ./zero2.json \
     --data_path  $DATA_PATH \
     --image_folder $IMAGE_PATH \
     --is_multimodal True \
@@ -42,4 +42,4 @@ deepspeed --include localhost:0,1,2,3 --master_port 29501 tinyllava/train/custom
     --lazy_preprocess True \
     --report_to tensorboard \
     --tokenizer_use_fast False \
-    --run_name custom-finetune-TinyLLaVA-Phi-2-SigLIP-3.1B-lora
+    --run_name pokemon-finetune-TinyLLaVA-Phi-2-SigLIP-3.1B-lora

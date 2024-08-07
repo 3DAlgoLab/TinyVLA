@@ -6,6 +6,7 @@ import tqdm
 import os
 import pandas
 from pathlib import Path
+import shutil
 
 meta_data_file = "/data/PokemonBLIPCaptions/metadata.csv"
 original_image_folder = Path(meta_data_file).parent
@@ -13,7 +14,11 @@ df = pandas.read_csv(meta_data_file)
 
 pokemon_data = []
 pokemon_image_path = "/data/pokemon/image"
-pokemon_data_path = "/data//pokemon/pokemon_blip_captions.json"
+pokemon_data_path = "/data/pokemon/pokemon_blip_captions.json"
+
+target_folder = Path(pokemon_data_path).parent
+if target_folder.exists():
+    shutil.rmtree(target_folder)
 
 os.makedirs(pokemon_image_path, exist_ok=True)
 os.makedirs(Path(pokemon_data_path).parent, exist_ok=True)
@@ -36,7 +41,7 @@ for index, row in tqdm.tqdm(df.iterrows()):
     uuid = shortuuid.uuid()
     sample_dict = dict()
     sample_dict["id"] = uuid
-    sample_dict["image"] = "image/" + uuid + ".png"
+    sample_dict["image"] = uuid + ".png"
 
     sample_img = Image.open(original_image_folder / row["file_name"])
     sample_img.save(os.path.join(pokemon_image_path, uuid + ".png"))
