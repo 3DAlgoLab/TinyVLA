@@ -1,7 +1,8 @@
 from transformers import AutoTokenizer
 
 # hf_path = "tinyllava/TinyLLaVA-Phi-2-SigLIP-3.1B"
-hf_path = "microsoft/phi-2"
+# hf_path = "microsoft/phi-2"
+hf_path = "Qwen/Qwen2-0.5B"
 # model_name = "bczhou/TinyLLaVA-3.1B"
 # model_name = "bert-base-uncased"
 tokenizer = AutoTokenizer.from_pretrained(hf_path)
